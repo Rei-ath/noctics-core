@@ -1,0 +1,5 @@
+**/*.pyc
+__pycache__/
+.env
+memory/system_prompt.local.txt
+memory/sessions/
