@@ -1,21 +1,24 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `interfaces/`: Integrations and orchestration adapters (e.g., `orchestrator_link.py`).
-- `memory/`: Long-/short-term state, anchors, and helpers.
-- `reasoning/`: Core reasoning utilities and algorithms.
-- `tests/`: Pytest suite (e.g., `tests/test_memory.py`).
+- `central/`: Core chat client, CLI, commands, and color helpers.
+  - `central/core.py`: importable ChatClient + session utilities.
+  - `central/cli.py`: interactive CLI (streams, helpers, sessions).
+  - `central/commands/`: small CLI helpers (completion, sessions, helper flow).
+- `interfaces/`: Integrations and adapters (e.g., `.env` loader, session logger, PII sanitizer).
+- `memory/`: System prompt and session storage (`session-*.json` per run, `day.json` aggregates).
+- `tests/`: Pytest suite (e.g., `tests/test_core_title.py`, `tests/test_session_logger.py`).
 - `main.py`: Local entry point.
-- `requirements.txt`: Runtime and dev dependencies.
+- `requirements.txt`: Dev/test tools (runtime is stdlib-only).
 - `jenv/`: Local Python virtualenv (ignored).
 
 Import policy: prefer public functions across modules; avoid deep internals. Keep modules small and cohesive.
 
 ## Build, Test, and Development Commands
 - Create env: `python -m venv jenv && source jenv/bin/activate` (Python 3.13).
-- Install deps: `pip install -r requirements.txt`.
+- Install dev deps: `pip install -r requirements.txt` (runtime uses stdlib; tests need these).
 - Run app: `python main.py`.
-- Run tests: `pytest -q` (subset: `pytest -k reasoning -q`).
+- Run tests: `pytest -q` (subset example: `pytest -k core -q`).
 - Coverage: `pytest --cov=.` (requires `pytest-cov`).
 
 ## Coding Style & Naming Conventions
@@ -26,8 +29,22 @@ Import policy: prefer public functions across modules; avoid deep internals. Kee
 
 ## Testing Guidelines
 - Framework: `pytest`; tests live under `tests/` and are named `test_*.py`.
-- Coverage: ≥ 80% for changed lines; include edge cases in `memory/anchors.py` and `reasoning/core.py`.
+- Seed tests: `compute_title_from_messages` and `SessionLogger` behaviors are covered; extend as you add features.
+- Coverage: ≥ 80% for changed lines; include edge cases in `central/core.py` and `interfaces/session_logger.py`.
 - Practices: one behavior per test; prefer fixtures; keep tests deterministic.
+
+## CLI Usage Examples
+- Stream responses: `python main.py --stream`
+- Manual mode (no API): `python main.py --manual`
+- Name a helper and stream: `python main.py --helper claude --stream`
+- One-off user message: `python main.py --user "Explain X" --stream`
+- Provide messages array: `python main.py --messages msgs.json --stream`
+- Sessions list/load/rename:
+- `python main.py --sessions-ls`
+- `python main.py --sessions-browse`
+- `python main.py --sessions-load session-YYYYMMDD-HHMMSS` (or `/load` → interactive picker)
+- `python main.py --sessions-rename session-YYYYMMDD-HHMMSS "My Title"`
+- `python main.py --sessions-archive-early`
 
 ## Commit & Pull Request Guidelines
 - Commits: Conventional Commits.

@@ -18,6 +18,9 @@ Central loads `.env` automatically from both the package folder and the current 
 - `CENTRAL_LLM_URL` (default `http://localhost:1234/v1/chat/completions`)
 - `CENTRAL_LLM_MODEL` (default `qwen/qwen3-1.7b`)
 - `CENTRAL_LLM_API_KEY` or `OPENAI_API_KEY` (optional)
+- `CENTRAL_HELPER_ANON` (default `1`): show sanitized helper queries for safe sharing
+- `CENTRAL_REDACT_NAMES` (optional): comma-separated names to redact in helper queries
+- `CENTRAL_HELPERS` (optional): comma-separated helper names to present when choosing a helper
 
 Example `.env`:
 
@@ -61,18 +64,25 @@ See `docs/CLI.md` for all flags and interactive commands.
 
 You can also trigger the stitch manually anytime with `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`).
 
+Privacy: When Central asks for a helper and emits a `[HELPER QUERY]` block, the CLI prints a sanitized version by default for safe copy/paste (redacts emails/phones/cards/IPs and optional names). Toggle with `--anon-helper` / `--no-anon-helper` or `/anon`.
+
+Selecting a helper: If you haven’t set `--helper`, the CLI will ask you to choose one when needed (from `CENTRAL_HELPERS` or a default list). You can type a number or a custom name.
+
+First prompt: When you send the very first message, the CLI proposes a short session title based on your request, offers a chance to add clarifying details, and lets you accept or override the title before the request goes to Central.
+
 ## Sessions
 
 - Storage: `memory/sessions/YYYY-MM-DD/`
-  - Turns: `session-*.jsonl`
+  - Turns: `session-*.json` (array of turn records)
+  - Day aggregate: `day.json` (auto-appended when sessions close; deduped)
   - Meta: `session-*.meta.json` (title, turns, created/updated, etc.)
 - Titles:
   - Set in-session: `/title My Topic`
   - Rename any saved session: `/rename session-YYYYMMDD-HHMMSS New Title` or `--sessions-rename ...`
   - Auto-title: on exit, Central derives a concise title from the first meaningful user message if you didn’t set one
 - Listing:
-  - Non-interactive: `--sessions-ls`
-  - Interactive: `/sessions` or `/ls`
+  - Non-interactive: `--sessions-ls` (full list), `--sessions-latest` (show most recent), or `--sessions-archive-early` (merge everything except latest into `memory/early-archives/`)
+  - Interactive: `/sessions` or `/ls`; quick summary: `/last`; browse menu: `/browse`; pretty-print: `/show ID`; archive: `/archive`
 - Loading:
   - `--sessions-load ID_OR_PATH` or in chat `/load ID`
 
@@ -103,6 +113,10 @@ print("log:", client.log_path())
 - `/helper NAME`: set helper label; `/helper` clears
 - `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`): paste helper result
 - `/sessions` or `/ls`: list saved sessions + titles
+- `/last`: show the most recently updated session
+- `/browse`: interactively list and view saved sessions
+- `/show ID`: pretty-print a saved session without loading it
+- `/archive`: merge all but the latest session into `memory/early-archives/`
 - `/load ID`: load a session by id
 - `/title NAME`: set current session title
 - `/rename ID NAME`: rename a saved session title
@@ -124,4 +138,3 @@ print("log:", client.log_path())
 ***
 
 Questions or improvements you want next? I can add a `--helper-result-file` flag for non-interactive stitching, or subcommands like `sessions ls|load|rename`.
-

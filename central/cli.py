@@ -24,14 +24,29 @@ except Exception:  # pragma: no cover - platform without readline
 from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
 from .colors import color
-from .core import (
-    ChatClient,
-    list_sessions,
-    resolve_session,
-    load_session_messages,
-    set_session_title_for,
-    merge_sessions_paths,
+from .core import ChatClient, compute_title_from_messages, load_session_messages
+from .commands.completion import setup_completions
+from .commands.helper import (
+    manual_helper_stream,
+    process_helper_result,
+    manual_central_stream,
+    extract_helper_query,
+    print_sanitized_helper_query,
 )
+from .commands.sessions import (
+    list_sessions as cmd_list_sessions,
+    print_sessions as cmd_print_sessions,
+    resolve_by_ident_or_index as cmd_resolve_by_ident_or_index,
+    load_into_context as cmd_load_into_context,
+    rename_session as cmd_rename_session,
+    merge_sessions as cmd_merge_sessions,
+    latest_session as cmd_latest_session,
+    print_latest_session as cmd_print_latest_session,
+    archive_early_sessions as cmd_archive_early_sessions,
+    show_session as cmd_show_session,
+    browse_sessions as cmd_browse_sessions,
+)
+from .commands.help_cmd import print_help as cmd_print_help
 from interfaces.dotenv import load_local_dotenv
 
 
@@ -76,7 +91,21 @@ def _printer():
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Interactive Chat Completions CLI")
+    parser = argparse.ArgumentParser(
+        description="Interactive Chat Completions CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python main.py --stream\n"
+            "  python main.py --manual\n"
+            "  python main.py --helper claude --stream\n"
+            "  python main.py --user 'Explain X' --stream\n"
+            "  python main.py --messages msgs.json --stream\n"
+            "  python main.py --sessions-ls\n"
+            "  python main.py --sessions-load session-20250913-234409\n"
+            "  python main.py --sessions-rename session-20250914-010016 'My Title'\n"
+        ),
+    )
     parser.add_argument(
         "--url",
         default=os.getenv("CENTRAL_LLM_URL", DEFAULT_URL),
@@ -165,6 +194,58 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default=None,
         help="Merge sessions (ids or indices) into a new merged folder and exit",
     )
+    parser.add_argument(
+        "--sessions-latest",
+        dest="sessions_latest",
+        action="store_true",
+        help="Show the most recently updated session and exit",
+    )
+    parser.add_argument(
+        "--sessions-archive-early",
+        dest="sessions_archive_early",
+        action="store_true",
+        help="Merge all but the latest session into memory/early-archives and exit",
+    )
+    parser.add_argument(
+        "--sessions-browse",
+        dest="sessions_browse",
+        action="store_true",
+        help="Interactively browse saved sessions and view their contents",
+    )
+    parser.add_argument(
+        "--sessions-show",
+        metavar="ID_OR_PATH",
+        dest="sessions_show",
+        default=None,
+        help="Pretty-print the contents of a saved session and exit",
+    )
+    parser.add_argument(
+        "--user-name",
+        dest="user_name",
+        default=os.getenv("CENTRAL_USER_NAME", "You"),
+        help="Name to display for your prompt label (env CENTRAL_USER_NAME)",
+    )
+    parser.add_argument(
+        "--bypass-helper",
+        dest="bypass_helper",
+        action="store_true",
+        help="Bypass Central->Helper stitching; you act as Central and paste the final reply",
+    )
+    # Helper anonymization toggle (default on unless CENTRAL_HELPER_ANON=0/false)
+    default_anon = (os.getenv("CENTRAL_HELPER_ANON", "1").lower() not in {"0", "false", "off", "no"})
+    parser.add_argument(
+        "--anon-helper",
+        dest="anon_helper",
+        action="store_true",
+        default=default_anon,
+        help="Also show a sanitized [HELPER QUERY] block for copy/paste",
+    )
+    parser.add_argument(
+        "--no-anon-helper",
+        dest="anon_helper",
+        action="store_false",
+        help="Disable sanitized helper-query output",
+    )
     return parser.parse_args(argv)
 
 
@@ -176,36 +257,18 @@ def main(argv: List[str]) -> int:
 
     # Session management commands (non-interactive)
     if args.sessions_ls:
-        items = list_sessions()
+        items = cmd_list_sessions()
         if not items:
             print("No sessions found.")
             return 0
-        # Print compact list: index, id, turns, title
-        for i, it in enumerate(items, 1):
-            ident = it.get("id")
-            turns = it.get("turns")
-            title = it.get("title") or "(untitled)"
-            print(f"{i:>2}. {ident}  [turns:{turns}]  {title}")
+        cmd_print_sessions(items)
         print("\nTip: load by index with --sessions-load N")
         return 0
 
     if args.sessions_rename is not None:
         ident, new_title = args.sessions_rename
-        # Allow numeric index from latest list ordering
-        path = None
-        if ident.isdigit():
-            items = list_sessions()
-            idx = int(ident)
-            if 1 <= idx <= len(items):
-                path = Path(items[idx - 1]["path"])  # type: ignore[index]
-        if path is None:
-            path = resolve_session(ident)
-        if not path:
-            print(f"Could not find session for: {ident}")
-            return 1
-        set_session_title_for(path, new_title, custom=True)
-        print(f"Renamed session {path.stem} -> '{new_title}'")
-        return 0
+        ok = cmd_rename_session(ident, new_title)
+        return 0 if ok else 1
 
     if args.sessions_merge is not None:
         # Accept indices and ids; allow comma-separated in args
@@ -215,25 +278,29 @@ def main(argv: List[str]) -> int:
         if not raw_tokens:
             print("No sessions specified to merge.")
             return 1
-        items = list_sessions()
-        paths: List[Path] = []
-        for ident in raw_tokens:
-            p: Optional[Path] = None
-            if ident.isdigit():
-                idx = int(ident)
-                if 1 <= idx <= len(items):
-                    p = Path(items[idx - 1]["path"])  # type: ignore[index]
-            if p is None:
-                p = resolve_session(ident)
-            if not p:
-                print(f"Skipping unknown session: {ident}")
-                continue
-            paths.append(p)
-        if len(paths) < 2:
-            print("Need at least two sessions to merge.")
+        out = cmd_merge_sessions(raw_tokens)
+        if out is None:
             return 1
-        out = merge_sessions_paths(paths)
-        print(f"Merged into: {out}")
+        return 0
+
+    if args.sessions_latest:
+        latest = cmd_latest_session()
+        if not latest:
+            print("No sessions found.")
+            return 0
+        cmd_print_latest_session(latest)
+        return 0
+
+    if args.sessions_archive_early:
+        out = cmd_archive_early_sessions()
+        return 0 if out else 1
+
+    if args.sessions_show:
+        ok = cmd_show_session(args.sessions_show, raw=bool(args.raw))
+        return 0 if ok else 1
+
+    if args.sessions_browse:
+        cmd_browse_sessions()
         return 0
 
     # Load default system prompt from file if not provided
@@ -259,15 +326,19 @@ def main(argv: List[str]) -> int:
 
     # Optionally load a saved session as starting context
     if args.sessions_load:
-        # Allow numeric index from latest list ordering
-        path = None
+        # Allow numeric index or explicit path
+        path: Optional[Path] = None
         if str(args.sessions_load).isdigit():
-            items = list_sessions()
+            items = cmd_list_sessions()
             idx = int(args.sessions_load)
             if 1 <= idx <= len(items):
                 path = Path(items[idx - 1]["path"])  # type: ignore[index]
         if path is None:
-            path = resolve_session(args.sessions_load)
+            candidate = Path(args.sessions_load)
+            if candidate.exists():
+                path = candidate
+        if path is None:
+            path = cmd_resolve_by_ident_or_index(str(args.sessions_load))
         if not path:
             raise SystemExit(f"--sessions-load: not found: {args.sessions_load}")
         loaded = load_session_messages(path)
@@ -307,89 +378,65 @@ def main(argv: List[str]) -> int:
         enable_logging=True,
     )
 
+    title_confirmed = bool(client.get_session_title())
+    first_prompt_handled = any(m.get("role") == "user" for m in client.messages)
+
+    def prepare_first_prompt_text(user_text: str, *, allow_interactive: bool) -> str:
+        nonlocal title_confirmed, first_prompt_handled
+        if first_prompt_handled:
+            return user_text
+
+        proposed_title = compute_title_from_messages(client.messages + [{"role": "user", "content": user_text}])
+
+        if not title_confirmed:
+            if allow_interactive and sys.stdin.isatty():
+                if proposed_title:
+                    print(color(f"Proposed session title: {proposed_title}", fg="yellow"))
+                else:
+                    print(color("Proposed session title: (unable to summarize)", fg="yellow"))
+
+                try:
+                    extra = input(color("Add clarifications (optional, press Enter to skip): ", fg="yellow"))
+                except EOFError:
+                    extra = ""
+                if extra.strip():
+                    user_text = f"{user_text}\n\nClarification: {extra.strip()}"
+                    proposed_title = compute_title_from_messages(
+                        client.messages + [{"role": "user", "content": user_text}]
+                    ) or proposed_title
+
+                prompt = "Session title"
+                if proposed_title:
+                    prompt += f" [{proposed_title}]"
+                prompt += ": "
+                try:
+                    resp = input(color(prompt, fg="yellow"))
+                except EOFError:
+                    resp = ""
+                resp = resp.strip()
+                if resp:
+                    client.set_session_title(resp, custom=True)
+                    print(color(f"Session titled: {resp}", fg="yellow"))
+                    title_confirmed = True
+                elif proposed_title:
+                    client.set_session_title(proposed_title, custom=False)
+                    print(color(f"Session title set: {proposed_title}", fg="yellow"))
+                    title_confirmed = True
+                else:
+                    title_confirmed = True
+            else:
+                if proposed_title:
+                    client.set_session_title(proposed_title, custom=False)
+                    print(color(f"Session title set: {proposed_title}", fg="yellow"))
+                    title_confirmed = True
+
+        first_prompt_handled = True
+        return user_text
+
     # ----------
     # Tab completion (interactive only)
     # ----------
-    def _setup_completions() -> None:
-        if not sys.stdin.isatty() or readline is None:
-            return
-
-        commands = [
-            "/help",
-            "/reset",
-            "/sessions",
-            "/ls",
-            "/result",
-            "/helper",
-            "/load",
-            "/title",
-            "/rename",
-            "/merge",
-        ]
-
-        # Helpers list from env var CENTRAL_HELPERS=comma,separated
-        env_helpers = [s.strip() for s in (os.getenv("CENTRAL_HELPERS") or "").split(",") if s.strip()]
-        default_helpers = ["claude", "o3", "gpt-4o", "sonnet", "llama", "mistral"]
-        helper_candidates = env_helpers or default_helpers
-
-        def complete(text: str, state: int) -> Optional[str]:
-            try:
-                line = readline.get_line_buffer()  # type: ignore[attr-defined]
-                beg = readline.get_begidx()  # type: ignore[attr-defined]
-            except Exception:
-                line, beg = "", 0
-
-            # Default: suggest commands starting with text when starting with '/'
-            if not line or line.startswith("/") and (" " not in line[:beg]):
-                matches = [c for c in commands if c.startswith(text or "")]
-                return matches[state] if state < len(matches) else None
-
-            # Parse the command and args region
-            head = line.split(" ", 1)[0]
-            arg_region = line[len(head):]
-            arg_text = arg_region.lstrip()
-            arg_index = 0 if not arg_text or arg_text.endswith(" ") else len(arg_text.split()) - 1
-
-            # /helper <NAME>
-            if head == "/helper":
-                if beg >= len(head) + 1:  # in argument region
-                    matches = [h for h in helper_candidates if h.startswith(text or "")]
-                    return matches[state] if state < len(matches) else None
-                return None
-
-            # Build session-based suggestions (indexes and ids)
-            def session_suggestions() -> List[str]:
-                items = list_sessions()
-                out: List[str] = []
-                # 1-based indices
-                out.extend([str(i) for i in range(1, len(items) + 1)])
-                # ids (stems)
-                out.extend([it.get("id") for it in items if it.get("id")])
-                return [s for s in out if s]
-
-            if head in {"/load", "/rename", "/merge"}:
-                # Only complete first argument (identifier); title is free-form for /rename
-                if beg >= len(head) + 1 and arg_index == 0:
-                    candidates = session_suggestions()
-                    matches = [c for c in candidates if c.startswith(text or "")]
-                    return matches[state] if state < len(matches) else None
-                return None
-
-            # For other commands, no special completion
-            return None
-
-        try:
-            readline.parse_and_bind("tab: complete")  # type: ignore[attr-defined]
-            # Make '/' a word break trigger
-            if hasattr(readline, "set_completer_delims"):
-                delims = readline.get_completer_delims()  # type: ignore[attr-defined]
-                # Keep default delims
-                readline.set_completer_delims(delims)
-            readline.set_completer(complete)  # type: ignore[attr-defined]
-        except Exception:
-            pass
-
-    _setup_completions()
+    setup_completions()
 
     def _manual_helper_stream(helper_name: Optional[str]) -> str:
         """Collect helper output interactively, echoing as a stream.
@@ -422,7 +469,7 @@ def main(argv: List[str]) -> int:
         if not helper_text:
             return None
         if args.stream:
-            print("\n" + color("Noctics Central (processing helper):", fg="green", bold=True) + " ", end="", flush=True)
+            print("\n" + color("Noctics Central (processing helper):", fg="#ffefff", bold=True) + " ", end="", flush=True)
             reply = client.process_helper_result(helper_text, on_delta=_printer())
             print()
             return reply
@@ -466,8 +513,28 @@ def main(argv: List[str]) -> int:
             assistant = client.one_turn(user_text, on_delta=_printer())
             print()
             if assistant is not None and ChatClient.wants_helper(assistant):
-                helper_text = _manual_helper_stream(args.helper)
-                final_assistant = _process_helper_result(helper_text)
+                if args.anon_helper:
+                    q = extract_helper_query(assistant)
+                    if q:
+                        print_sanitized_helper_query(q, user_name=args.user_name)
+                # Prompt to choose a helper if none set
+                if not args.helper:
+                    from .commands.helper import choose_helper_interactively
+
+                    chosen = choose_helper_interactively(args.helper)
+                    if chosen and chosen != args.helper:
+                        args.helper = chosen
+                        print(color(f"Helper set to '{args.helper}'.", fg="yellow"))
+                helper_text = manual_helper_stream(args.helper)
+                if args.bypass_helper:
+                    central_reply = manual_central_stream(args.helper)
+                    if central_reply:
+                        wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
+                        client.record_turn(wrapped, central_reply)
+                        print(central_reply)
+                        return central_reply
+                    return assistant
+                final_assistant = process_helper_result(client=client, helper_text=helper_text, stream=bool(args.stream), on_delta=_printer())
                 if final_assistant is not None:
                     return final_assistant
             return assistant
@@ -476,8 +543,28 @@ def main(argv: List[str]) -> int:
             if assistant is not None:
                 print(assistant)
                 if ChatClient.wants_helper(assistant):
-                    helper_text = _manual_helper_stream(args.helper)
-                    final_text = _process_helper_result(helper_text)
+                    if args.anon_helper:
+                        q = extract_helper_query(assistant)
+                        if q:
+                            print_sanitized_helper_query(q, user_name=args.user_name)
+                    # Prompt to choose a helper if none set
+                    if not args.helper:
+                        from .commands.helper import choose_helper_interactively
+
+                        chosen = choose_helper_interactively(args.helper)
+                        if chosen and chosen != args.helper:
+                            args.helper = chosen
+                            print(color(f"Helper set to '{args.helper}'.", fg="yellow"))
+                    helper_text = manual_helper_stream(args.helper)
+                    if args.bypass_helper:
+                        central_reply = manual_central_stream(args.helper)
+                        if central_reply:
+                            wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
+                            client.record_turn(wrapped, central_reply)
+                            print(central_reply)
+                            return central_reply
+                        return assistant
+                    final_text = process_helper_result(client=client, helper_text=helper_text, stream=bool(args.stream), on_delta=_printer())
                     if final_text is not None:
                         return final_text
             return assistant
@@ -486,6 +573,7 @@ def main(argv: List[str]) -> int:
     if args.user is None and not sys.stdin.isatty():
         initial = sys.stdin.read().strip()
         if initial:
+            initial = prepare_first_prompt_text(initial, allow_interactive=False)
             one_turn(initial)
         # Auto title for non-interactive runs
         try:
@@ -498,7 +586,8 @@ def main(argv: List[str]) -> int:
 
     # Optional initial user message via flag
     if args.user:
-        one_turn(args.user)
+        initial_user = prepare_first_prompt_text(args.user, allow_interactive=False)
+        one_turn(initial_user)
 
     # Interactive loop
     def _print_help() -> None:
@@ -517,16 +606,17 @@ def main(argv: List[str]) -> int:
         print(color("  /rename ID T   rename a saved session's title", fg="yellow"))
         print(color("  /merge A B..   merge sessions by ids or indices", fg="yellow"))
         print(color("  /reset         reset context to just the system message", fg="yellow"))
+        print(color("  /name NAME     set the input prompt label (default: You)", fg="yellow"))
         print(color("Docs: README.md, docs/CLI.md, docs/SESSIONS.md, docs/HELPERS.md", fg="yellow"))
         print(color("Tip: run with --help to see all CLI flags.", fg="yellow"))
 
-    _print_help()
+    cmd_print_help(client, user_name=args.user_name)
     if sys.stdin.isatty() and readline is not None:
         print(color("[Tab completion enabled: type '/' then press Tab]", fg="yellow"))
     try:
         while True:
             try:
-                prompt = input(color("You:", fg="cyan", bold=True) + " ").strip()
+                prompt = input(color(f"{args.user_name}:", fg="cyan", bold=True) + " ").strip()
             except EOFError:
                 break
             if not prompt:
@@ -534,7 +624,7 @@ def main(argv: List[str]) -> int:
             if prompt.lower() in {"exit", "quit"}:
                 break
             if prompt.lower() in {"/help", "help", "/?", "/h"}:
-                _print_help()
+                cmd_print_help(client, user_name=args.user_name)
                 continue
             if prompt.strip() == "/reset":
                 # Reset to just system message if present
@@ -552,42 +642,100 @@ def main(argv: List[str]) -> int:
                     print(color(f"Helper set to '{args.helper}'. Manual paste mode enabled.", fg="yellow"))
                 continue
 
+            if prompt.startswith("/bypass") or prompt.strip() in {"/bypass-helper", "/act-as-central", "/iam-central"}:
+                tokens = prompt.split()
+                if len(tokens) == 1:
+                    args.bypass_helper = not bool(args.bypass_helper)
+                else:
+                    val = tokens[1].lower()
+                    args.bypass_helper = val in {"1", "true", "on", "yes"}
+                state = "ON" if args.bypass_helper else "OFF"
+                print(color(f"Bypass helper stitching: {state}", fg="yellow"))
+                continue
+
+            if prompt.startswith("/name "):
+                new_name = prompt.split(maxsplit=1)[1].strip()
+                if new_name:
+                    args.user_name = new_name
+                    print(color(f"Prompt label set to: {args.user_name}", fg="yellow"))
+                continue
+
+            if prompt.startswith("/anon") or prompt.strip() in {"/anon-helper", "/anon"}:
+                tokens = prompt.split()
+                if len(tokens) == 1:
+                    args.anon_helper = not bool(args.anon_helper)
+                else:
+                    val = tokens[1].lower()
+                    args.anon_helper = val in {"1", "true", "on", "yes"}
+                state = "ON" if args.anon_helper else "OFF"
+                print(color(f"Helper anonymization: {state}", fg="yellow"))
+                continue
+
             if prompt.strip() in {"/sessions", "/ls", "/sessions-ls", "/list", "/list-sessions"}:
-                items = list_sessions()
-                if not items:
+                items = cmd_list_sessions()
+                cmd_print_sessions(items)
+                print(color("Tip: load by index: /load N", fg="yellow"))
+                continue
+
+            if prompt.strip() in {"/last", "/latest", "/recent"}:
+                latest = cmd_latest_session()
+                if not latest:
                     print(color("No sessions found.", fg="yellow"))
                 else:
-                    for i, it in enumerate(items, 1):
-                        ident = it.get("id")
-                        turns = it.get("turns")
-                        title = it.get("title") or "(untitled)"
-                        print(f"{i:>2}. {ident}  [turns:{turns}]  {title}")
-                    print(color("Tip: load by index: /load N", fg="yellow"))
+                    cmd_print_latest_session(latest)
+                continue
+
+            if prompt.strip() in {"/archive", "/archive-early", "/archive-old"}:
+                cmd_archive_early_sessions()
+                continue
+
+            if prompt.startswith("/show "):
+                ident = prompt.split(maxsplit=1)[1].strip()
+                if not cmd_show_session(ident):
+                    continue
+                continue
+
+            if prompt.strip() in {"/browse", "/sessions-browse"}:
+                cmd_browse_sessions()
                 continue
 
             if prompt.startswith("/load "):
                 ident = prompt.split(maxsplit=1)[1].strip()
-                # Numeric index support relative to latest ordering
-                path = None
-                if ident.isdigit():
-                    items = list_sessions()
-                    idx = int(ident)
-                    if 1 <= idx <= len(items):
-                        path = Path(items[idx - 1]["path"])  # type: ignore[index]
-                if path is None:
-                    path = resolve_session(ident)
-                if not path:
-                    print(color(f"No session found for: {ident}", fg="red"))
-                    continue
-                loaded = load_session_messages(path)
+                loaded = cmd_load_into_context(ident, messages=messages)
                 if not loaded:
-                    print(color("Session is empty or unreadable.", fg="red"))
                     continue
                 messages = loaded
                 client.set_messages(messages)
                 sys_msgs = [m for m in messages if m.get("role") == "system"]
                 args.system = sys_msgs[0].get("content") if sys_msgs else None
-                print(color(f"Loaded session: {path.stem}", fg="yellow"))
+                # print name by resolving for display
+                p = cmd_resolve_by_ident_or_index(ident)
+                print(color(f"Loaded session: {p.stem if p else ident}", fg="yellow"))
+                continue
+
+            if prompt.strip() == "/load":
+                items = cmd_list_sessions()
+                if not items:
+                    print(color("No sessions found.", fg="yellow"))
+                    continue
+                cmd_print_sessions(items)
+                try:
+                    selection = input(color("Select session number (Enter to cancel): ", fg="yellow")).strip()
+                except EOFError:
+                    print()
+                    continue
+                if not selection or selection.lower() in {"q", "quit", "exit"}:
+                    continue
+                loaded = cmd_load_into_context(selection, messages=messages)
+                if not loaded:
+                    continue
+                messages = loaded
+                client.set_messages(messages)
+                sys_msgs = [m for m in messages if m.get("role") == "system"]
+                args.system = sys_msgs[0].get("content") if sys_msgs else None
+                p = cmd_resolve_by_ident_or_index(selection)
+                display = p.stem if p else selection
+                print(color(f"Loaded session: {display}", fg="yellow"))
                 continue
 
             if prompt.startswith("/merge "):
@@ -596,25 +744,7 @@ def main(argv: List[str]) -> int:
                     print(color("Usage: /merge ID [ID ...] (supports indices)", fg="yellow"))
                     continue
                 tokens = [t for part in rest.split() for t in part.split(",") if t]
-                items = list_sessions()
-                paths: List[Path] = []
-                for ident in tokens:
-                    p: Optional[Path] = None
-                    if ident.isdigit():
-                        idx = int(ident)
-                        if 1 <= idx <= len(items):
-                            p = Path(items[idx - 1]["path"])  # type: ignore[index]
-                    if p is None:
-                        p = resolve_session(ident)
-                    if not p:
-                        print(color(f"Skipping unknown session: {ident}", fg="red"))
-                        continue
-                    paths.append(p)
-                if len(paths) < 2:
-                    print(color("Need at least two sessions to merge.", fg="yellow"))
-                    continue
-                out = merge_sessions_paths(paths)
-                print(color(f"Merged into: {out}", fg="yellow"))
+                cmd_merge_sessions(tokens)
                 continue
             if prompt.startswith("/title "):
                 title = prompt.split(maxsplit=1)[1].strip()
@@ -635,41 +765,49 @@ def main(argv: List[str]) -> int:
                 if not sep or not new_title.strip():
                     print(color("Usage: /rename ID New Title", fg="yellow"))
                     continue
-                # Numeric index support relative to latest ordering
-                path = None
-                if ident.isdigit():
-                    items = list_sessions()
-                    idx = int(ident)
-                    if 1 <= idx <= len(items):
-                        path = Path(items[idx - 1]["path"])  # type: ignore[index]
-                if path is None:
-                    path = resolve_session(ident)
-                if not path:
-                    print(color(f"No session found for: {ident}", fg="red"))
+                if not cmd_rename_session(ident, new_title.strip()):
                     continue
-                set_session_title_for(path, new_title.strip(), custom=True)
-                print(color(f"Renamed session {path.stem} -> '{new_title.strip()}'", fg="yellow"))
                 continue
 
             if prompt in {"/result", "/helper-result", "/paste-helper", "/hr"}:
                 # Explicitly paste a helper response and send it for stitching
-                helper_text = _manual_helper_stream(args.helper)
-                _process_helper_result(helper_text)
+                helper_text = manual_helper_stream(args.helper)
+                if args.bypass_helper:
+                    central_reply = manual_central_stream(args.helper)
+                    if central_reply:
+                        wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
+                        client.record_turn(wrapped, central_reply)
+                        print(central_reply)
+                else:
+                    process_helper_result(client=client, helper_text=helper_text, stream=bool(args.stream), on_delta=_printer())
                 continue
 
             helper_suffix = f" [{args.helper}]" if args.helper else ""
-            print("\n" + color(f"Noctics Central{helper_suffix}:", fg="green", bold=True) + " ", end="", flush=True)
-            one_turn(prompt)
+            prompt_text = prepare_first_prompt_text(prompt, allow_interactive=True)
+            print("\n" + color(f"Noctics Central{helper_suffix}:", fg="#ffefff", bold=True) + " ", end="", flush=True)
+            one_turn(prompt_text)
     except KeyboardInterrupt:
         print("\n" + color("Interrupted.", fg="yellow"))
     finally:
+        deleted = False
         # Auto-generate a session title if not user-provided
         try:
             title = client.ensure_auto_title()
             if title:
                 print(color(f"Saved session title: {title}", fg="yellow"))
+            else:
+                if client.maybe_delete_empty_session():
+                    print(color("Session empty; removed log.", fg="yellow"))
+                    deleted = True
         except Exception:
             pass
+        if not deleted:
+            try:
+                day_log = client.append_session_to_day_log()
+                if day_log:
+                    print(color(f"Appended session to {day_log}", fg="yellow"))
+            except Exception:
+                pass
     return 0
 
 

@@ -13,10 +13,36 @@ No external dependencies, append-only.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+
+def format_session_display_name(session_id: str) -> str:
+    """Return a human-friendly label for a session file stem.
+
+    Examples:
+        session-20250913-123456 -> "Session 2025-09-13 12:34:56 UTC"
+        session-merged-20250913-123456 -> "Merged session 2025-09-13 12:34:56 UTC"
+    Fallback: replace dashes with spaces and title-case the id.
+    """
+    base = session_id or ""
+    prefixes = [
+        ("session-merged-", "Merged session"),
+        ("session-", "Session"),
+    ]
+    for prefix, label in prefixes:
+        if base.startswith(prefix):
+            suffix = base[len(prefix):]
+            try:
+                dt = datetime.strptime(suffix, "%Y%m%d-%H%M%S")
+            except ValueError:
+                break
+            return f"{label} {dt.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+    # Fallback formatting
+    pretty = base.replace("-", " ").strip()
+    return pretty.title() if pretty else "Session"
 
 
 @dataclass
@@ -29,19 +55,32 @@ class SessionLogger:
     _turn: int = 0
     _title: Optional[str] = None
     _title_custom: bool = False
+    _display_name: Optional[str] = None
+    _records: List[Dict[str, Any]] = field(default_factory=list, init=False)
 
     def start(self) -> None:
         # Create a date-based subfolder (UTC) for sessions, e.g.,
-        # memory/sessions/2025-09-13/session-20250913-123456.jsonl
+        # memory/sessions/2025-09-13/session-20250913-123456.json
         base = self.dirpath
-        date_folder = datetime.utcnow().date().isoformat()  # YYYY-MM-DD
+        now_utc = datetime.now(timezone.utc)
+        date_folder = now_utc.date().isoformat()  # YYYY-MM-DD
         dated_dir = base / date_folder
         dated_dir.mkdir(parents=True, exist_ok=True)
 
-        ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-        self._file = dated_dir / f"session-{ts}.jsonl"
-        # Touch the file so the session is visible immediately even before first turn
-        self._file.touch(exist_ok=True)
+        ts = now_utc.strftime("%Y%m%d-%H%M%S")
+        self._file = dated_dir / f"session-{ts}.json"
+        self._display_name = format_session_display_name(self._file.stem)
+        self._records = []
+        if self._file.exists():
+            try:
+                data = json.loads(self._file.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    self._records = data
+            except Exception:
+                self._records = []
+        else:
+            self._file.write_text("[]", encoding="utf-8")
+
         # Create/initialize sidecar meta file
         self._meta_file = self._file.with_name(self._file.stem + ".meta.json")
         self._write_meta(initial=True)
@@ -56,11 +95,17 @@ class SessionLogger:
                 "model": self.model,
                 "sanitized": bool(self.sanitized),
                 "turn": self._turn,
-                "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "file_name": self._file.name if self._file else None,
+                "display_name": self._display_name,
             },
         }
-        with self._file.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        self._records.append(rec)
+        if self._file is not None:
+            self._file.write_text(
+                json.dumps(self._records, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         self._write_meta()
 
     # -----------------
@@ -76,13 +121,18 @@ class SessionLogger:
             try:
                 data = json.loads(self._meta_file.read_text(encoding="utf-8"))
                 created_iso = data.get("created")
-                # Preserve title/custom if already set
+                existing_title = data.get("title")
+                existing_custom = bool(data.get("custom", False))
                 if self._title is None:
-                    self._title = data.get("title")
-                self._title_custom = bool(data.get("custom", False))
+                    self._title = existing_title
+                    self._title_custom = existing_custom
+                elif not self._title_custom and self._title == existing_title:
+                    self._title_custom = existing_custom
+                if self._display_name is None:
+                    self._display_name = data.get("display_name")
             except Exception:
                 created_iso = None
-        now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
         meta = {
             "id": self._file.stem,
             "path": str(self._file),
@@ -93,6 +143,8 @@ class SessionLogger:
             "updated": now,
             "title": self._title,
             "custom": bool(self._title_custom),
+            "file_name": self._file.name if self._file else None,
+            "display_name": self._display_name or format_session_display_name(self._file.stem),
         }
         self._meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -119,10 +171,12 @@ class SessionLogger:
             "turns": self._turn,
             "title": self._title,
             "custom": bool(self._title_custom),
+            "file_name": self._file.name if self._file else None,
+            "display_name": self._display_name if self._display_name else (format_session_display_name(self._file.stem) if self._file else None),
         }
 
     def meta_path(self) -> Optional[Path]:
         return self._meta_file
-    
+
     def log_path(self) -> Optional[Path]:
         return self._file
