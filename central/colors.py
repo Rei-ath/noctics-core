@@ -37,6 +37,21 @@ class _Codes:
     CYAN = "\x1b[36m"
 
 
+def _fg_from_hex(s: str) -> str:
+    s = s.strip()
+    if s.startswith("#"):
+        s = s[1:]
+    if len(s) != 6:
+        return ""
+    try:
+        r = int(s[0:2], 16)
+        g = int(s[2:4], 16)
+        b = int(s[4:6], 16)
+    except Exception:
+        return ""
+    return f"\x1b[38;2;{r};{g};{b}m"
+
+
 def color(text: str, *, fg: str | None = None, bold: bool = False) -> str:
     if not _ON or (fg is None and not bold):
         return text
@@ -44,6 +59,9 @@ def color(text: str, *, fg: str | None = None, bold: bool = False) -> str:
     if bold:
         parts.append(_Codes.BOLD)
     if fg:
-        parts.append(getattr(_Codes, fg.upper(), ""))
+        # Support 24-bit truecolor via hex (e.g., "#ff00aa") as well as named colors
+        if isinstance(fg, str) and fg.startswith("#") and len(fg) == 7:
+            parts.append(_fg_from_hex(fg))
+        else:
+            parts.append(getattr(_Codes, fg.upper(), ""))
     return "".join(parts) + text + _Codes.RESET
-

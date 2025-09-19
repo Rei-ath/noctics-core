@@ -13,11 +13,11 @@ import json
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 
 from interfaces.pii import sanitize as pii_sanitize
-from interfaces.session_logger import SessionLogger
+from interfaces.session_logger import SessionLogger, format_session_display_name
 from interfaces.dotenv import load_local_dotenv
 
 
@@ -304,6 +304,101 @@ class ChatClient:
             return None
         return self.logger._file
 
+    def maybe_delete_empty_session(self) -> bool:
+        if not self.logger:
+            return False
+        path = self.logger.log_path()
+        if not path or not path.exists():
+            return False
+        meta_path = self.logger.meta_path()
+        try:
+            if meta_path and meta_path.exists():
+                data = json.loads(meta_path.read_text(encoding="utf-8"))
+                if data.get("turns"):
+                    return False
+            if path.suffix == ".json":
+                try:
+                    records = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    records = []
+                for obj in records or []:
+                    msgs = obj.get("messages") if isinstance(obj, dict) else None
+                    if not msgs:
+                        continue
+                    has_user = any(m.get("role") == "user" for m in msgs)
+                    has_asst = any(m.get("role") == "assistant" for m in msgs)
+                    if has_user or has_asst:
+                        return False
+            else:
+                with path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                        except Exception:
+                            obj = None
+                        if obj and obj.get("messages"):
+                            msgs = obj["messages"]
+                            has_user = any(m.get("role") == "user" for m in msgs)
+                            has_asst = any(m.get("role") == "assistant" for m in msgs)
+                            if has_user or has_asst:
+                                return False
+        except FileNotFoundError:
+            return False
+
+        path.unlink(missing_ok=True)
+        if meta_path:
+            meta_path.unlink(missing_ok=True)
+        try:
+            parent = path.parent
+            parent.rmdir()
+        except OSError:
+            pass
+        return True
+
+    def append_session_to_day_log(self) -> Optional[Path]:
+        if not self.logger:
+            return None
+        log_path = self.logger.log_path()
+        if not log_path or not log_path.exists():
+            return None
+        try:
+            records = json.loads(log_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        if not isinstance(records, list) or not records:
+            return None
+
+        meta = self.logger.get_meta()
+        day_dir = log_path.parent
+        day_log = day_dir / "day.json"
+        try:
+            if day_log.exists():
+                day_data = json.loads(day_log.read_text(encoding="utf-8"))
+                if not isinstance(day_data, list):
+                    day_data = []
+            else:
+                day_data = []
+        except Exception:
+            day_data = []
+
+        session_id = log_path.stem
+        day_data = [entry for entry in day_data if entry.get("id") != session_id]
+        day_data.append(
+            {
+                "id": session_id,
+                "title": meta.get("title"),
+                "custom": meta.get("custom"),
+                "path": str(log_path),
+                "records": records,
+                "meta": meta,
+            }
+        )
+        day_log.write_text(json.dumps(day_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        return day_log
+
 
 # ------------------------------
 # Session management utilities
@@ -338,10 +433,20 @@ def _meta_path_for(log_path: Path) -> Path:
     return log_path.with_name(log_path.stem + ".meta.json")
 
 
+def _session_files_for_day(day_dir: Path) -> Dict[str, Path]:
+    files: Dict[str, Path] = {}
+    for pattern in ("session-*.jsonl", "session-*.json"):
+        for log_path in sorted(day_dir.glob(pattern), reverse=True):
+            if log_path.name.endswith(".meta.json"):
+                continue
+            files.setdefault(log_path.stem, log_path)
+    return files
+
+
 def list_sessions(root: Path = Path("memory/sessions")) -> List[Dict[str, Any]]:
     """Return a list of session infos sorted by updated desc.
 
-    Each item: {id, path, title, custom, turns, created, updated}
+    Each item: {id, path, title, custom, turns, created, updated, file_name, display_name}
     """
     items: List[Dict[str, Any]] = []
     if not root.exists():
@@ -349,7 +454,8 @@ def list_sessions(root: Path = Path("memory/sessions")) -> List[Dict[str, Any]]:
     for day_dir in sorted(root.iterdir() if root.is_dir() else [], reverse=True):
         if not day_dir.is_dir():
             continue
-        for log_path in sorted(day_dir.glob("session-*.jsonl"), reverse=True):
+        file_map = _session_files_for_day(day_dir)
+        for log_path in file_map.values():
             meta_path = _meta_path_for(log_path)
             info: Dict[str, Any]
             if meta_path.exists():
@@ -359,25 +465,46 @@ def list_sessions(root: Path = Path("memory/sessions")) -> List[Dict[str, Any]]:
                     info = {}
                 info.setdefault("id", log_path.stem)
                 info.setdefault("path", str(log_path))
-                info.setdefault("turns", sum(1 for _ in log_path.open("r", encoding="utf-8")))
+                if log_path.suffix == ".json":
+                    try:
+                        data = json.loads(log_path.read_text(encoding="utf-8"))
+                        info.setdefault("turns", len(data))
+                    except Exception:
+                        info.setdefault("turns", 0)
+                else:
+                    info.setdefault("turns", sum(1 for _ in log_path.open("r", encoding="utf-8")))
+                info.setdefault("file_name", log_path.name)
+                info.setdefault("display_name", format_session_display_name(log_path.stem))
             else:
                 # Fallback without meta
                 # Quick turn count (lines)
                 turns = 0
-                try:
-                    with log_path.open("r", encoding="utf-8") as f:
-                        for _ in f:
-                            turns += 1
-                except Exception:
-                    turns = 0
+                if log_path.suffix == ".json":
+                    try:
+                        turns = len(json.loads(log_path.read_text(encoding="utf-8")))
+                    except Exception:
+                        turns = 0
+                else:
+                    try:
+                        with log_path.open("r", encoding="utf-8") as f:
+                            for _ in f:
+                                turns += 1
+                    except Exception:
+                        turns = 0
                 # Title from first record's user
                 title = None
                 try:
-                    first_line = log_path.open("r", encoding="utf-8").readline()
-                    if first_line:
-                        obj = json.loads(first_line)
-                        msgs = obj.get("messages") or []
-                        title = compute_title_from_messages(msgs)
+                    if log_path.suffix == ".json":
+                        data = json.loads(log_path.read_text(encoding="utf-8"))
+                        first = data[0] if isinstance(data, list) and data else None
+                        msgs = first.get("messages") if isinstance(first, dict) else []
+                        title = compute_title_from_messages(msgs or [])
+                    else:
+                        first_line = log_path.open("r", encoding="utf-8").readline()
+                        if first_line:
+                            obj = json.loads(first_line)
+                            msgs = obj.get("messages") or []
+                            title = compute_title_from_messages(msgs)
                 except Exception:
                     title = None
                 stat = log_path.stat()
@@ -389,6 +516,8 @@ def list_sessions(root: Path = Path("memory/sessions")) -> List[Dict[str, Any]]:
                     "custom": False,
                     "created": None,
                     "updated": None,
+                    "file_name": log_path.name,
+                    "display_name": format_session_display_name(log_path.stem),
                 }
             items.append(info)
     # Sort by updated desc (fallback by path mtime)
@@ -429,28 +558,36 @@ def load_session_messages(log_path: Path) -> List[Dict[str, Any]]:
     messages: List[Dict[str, Any]] = []
     system_set = False
     try:
-        with log_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except Exception:
-                    continue
-                turn_msgs = obj.get("messages") or []
-                # Add system once (if present in this turn)
-                if not system_set:
-                    for m in turn_msgs:
-                        if m.get("role") == "system":
-                            messages.append(m)
-                            system_set = True
-                            break
-                # Add the user/assistant pair from this record
-                # (logger captures just the current turn)
-                pair = [m for m in turn_msgs if m.get("role") in {"user", "assistant"}]
-                if pair:
-                    messages.extend(pair)
+        if log_path.suffix == ".json":
+            try:
+                data = json.loads(log_path.read_text(encoding="utf-8"))
+            except Exception:
+                return []
+            records = data if isinstance(data, list) else []
+        else:
+            records = []
+            with log_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except Exception:
+                        continue
+                    records.append(obj)
+
+        for obj in records:
+            turn_msgs = obj.get("messages") or []
+            if not system_set:
+                for m in turn_msgs:
+                    if m.get("role") == "system":
+                        messages.append(m)
+                        system_set = True
+                        break
+            pair = [m for m in turn_msgs if m.get("role") in {"user", "assistant"}]
+            if pair:
+                messages.extend(pair)
     except FileNotFoundError:
         pass
     return messages
@@ -501,30 +638,34 @@ def merge_sessions_paths(paths: List[Path], *, title: Optional[str] = None, root
                 combined.append(m)
 
     # Prepare output directory and filenames
-    date_dir = root / ("merged-" + datetime.utcnow().date().isoformat())
+    now_utc = datetime.now(timezone.utc)
+    date_dir = root / ("merged-" + now_utc.date().isoformat())
     date_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    out_log = date_dir / f"session-merged-{ts}.jsonl"
+    ts = now_utc.strftime("%Y%m%d-%H%M%S")
+    out_log = date_dir / f"session-merged-{ts}.json"
     out_meta = out_log.with_name(out_log.stem + ".meta.json")
 
     # Build records (one per user/assistant pair)
     sys_msg = next((m for m in combined if m.get("role") == "system"), None)
     pairs = _group_user_assistant_pairs(combined)
     turns = 0
-    with out_log.open("w", encoding="utf-8") as f:
-        for user_m, asst_m in pairs:
-            rec_msgs = ([sys_msg] if sys_msg else []) + [user_m, asst_m]
-            turns += 1
-            rec = {
-                "messages": rec_msgs,
-                "meta": {
-                    "model": "merged",
-                    "sanitized": False,
-                    "turn": turns,
-                    "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-                },
-            }
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    records: List[Dict[str, Any]] = []
+    for user_m, asst_m in pairs:
+        rec_msgs = ([sys_msg] if sys_msg else []) + [user_m, asst_m]
+        turns += 1
+        rec = {
+            "messages": rec_msgs,
+            "meta": {
+                "model": "merged",
+                "sanitized": False,
+                "turn": turns,
+                "ts": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "file_name": out_log.name,
+                "display_name": format_session_display_name(out_log.stem),
+            },
+        }
+        records.append(rec)
+    out_log.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Compose title if not provided: concat first few source titles or ids
     if title is None:
@@ -544,7 +685,7 @@ def merge_sessions_paths(paths: List[Path], *, title: Optional[str] = None, root
         title = f"Merged: {base}"
 
     # Write meta
-    now_iso = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     meta = {
         "id": out_log.stem,
         "path": str(out_log),
@@ -556,9 +697,106 @@ def merge_sessions_paths(paths: List[Path], *, title: Optional[str] = None, root
         "title": title,
         "custom": False,
         "sources": source_ids,
+        "file_name": out_log.name,
+        "display_name": format_session_display_name(out_log.stem),
     }
     out_meta.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return out_log
+
+
+def archive_early_sessions(
+    *,
+    root: Path = Path("memory/sessions"),
+    archive_root: Path = Path("memory/early-archives"),
+    delete_sources: bool = True,
+) -> Optional[Path]:
+    """Merge all but the latest session into a single archive file.
+
+    Returns the path to the archived session log, or None if no archive was created.
+    """
+    infos = list_sessions(root)
+    if len(infos) <= 1:
+        return None
+
+    latest = infos[0]
+    archive_infos = infos[1:]
+    paths: List[Path] = []
+    for info in archive_infos:
+        path_str = info.get("path")
+        if not path_str:
+            continue
+        path = Path(path_str)
+        if path.exists():
+            paths.append(path)
+    if not paths:
+        return None
+
+    latest_display = latest.get("display_name") or format_session_display_name(str(latest.get("id")))
+    title = f"Early archive (before {latest_display})"
+    merged_path = merge_sessions_paths(paths, title=title, root=archive_root)
+
+    # Rename merged file to an early-archive specific stem
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    archive_stem = f"session-early-archive-{timestamp}"
+    archive_log = merged_path.with_name(f"{archive_stem}.json")
+    merged_path.rename(archive_log)
+
+    merged_meta_path = merged_path.with_name(merged_path.stem + ".meta.json")
+    archive_meta_path = archive_log.with_name(f"{archive_stem}.meta.json")
+    if merged_meta_path.exists():
+        merged_meta_path.rename(archive_meta_path)
+
+    meta: Dict[str, Any] = {}
+    if archive_meta_path.exists():
+        try:
+            meta = json.loads(archive_meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            meta = {}
+
+    meta.update(
+        {
+            "id": archive_stem,
+            "path": str(archive_log),
+            "file_name": archive_log.name,
+            "display_name": format_session_display_name(archive_stem),
+        }
+    )
+    meta["archive"] = {
+        "type": "early",
+        "latest_excluded_id": latest.get("id"),
+        "latest_excluded_display_name": latest_display,
+        "source_count": len(paths),
+        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+    }
+
+    archive_meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    if delete_sources:
+        for p in paths:
+            try:
+                p.unlink(missing_ok=False)
+            except FileNotFoundError:
+                pass
+            meta_p = p.with_name(p.stem + ".meta.json")
+            meta_p.unlink(missing_ok=True)
+            # Remove parent dir if it becomes empty and is under root
+            try:
+                if p.parent != archive_root and p.parent != root:
+                    p.parent.rmdir()
+            except OSError:
+                pass
+        # Clean up empty day directories under root
+        try:
+            for day_dir in root.iterdir():
+                if day_dir.is_dir():
+                    try:
+                        next(day_dir.iterdir())
+                    except StopIteration:
+                        day_dir.rmdir()
+        except FileNotFoundError:
+            pass
+
+    return archive_log
 
 
 def set_session_title_for(log_path: Path, title: str, *, custom: bool = True) -> None:
@@ -587,12 +825,20 @@ def set_session_title_for(log_path: Path, title: str, *, custom: bool = True) ->
                 "sanitized": None,
                 "created": None,
                 "updated": None,
+                "file_name": log_path.name,
+                "display_name": format_session_display_name(log_path.stem),
             }
     except Exception:
-        meta = {"id": log_path.stem, "path": str(log_path)}
+        meta = {
+            "id": log_path.stem,
+            "path": str(log_path),
+            "file_name": log_path.name,
+            "display_name": format_session_display_name(log_path.stem),
+        }
     meta["title"] = title.strip() if title else None
     meta["custom"] = bool(custom)
     # Update updated time
-    from datetime import datetime
-    meta["updated"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    meta["updated"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    meta.setdefault("file_name", log_path.name)
+    meta.setdefault("display_name", format_session_display_name(log_path.stem))
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -49,8 +49,7 @@ def sanitize(text: str) -> str:
       - IPv4 -> [REDACTED:IP]
     """
     text = EMAIL_RE.sub("[REDACTED:EMAIL]", text)
-    text = PHONE_RE.sub("[REDACTED:PHONE]", text)
     text = CARD_RE.sub(_redact_card, text)
     text = IPV4_RE.sub("[REDACTED:IP]", text)
+    text = PHONE_RE.sub("[REDACTED:PHONE]", text)
     return text
-
