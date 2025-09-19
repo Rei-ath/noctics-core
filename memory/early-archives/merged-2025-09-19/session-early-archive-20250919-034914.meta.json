@@ -1,0 +1,40 @@
+{
+  "id": "session-early-archive-20250919-034914",
+  "path": "memory/early-archives/merged-2025-09-19/session-early-archive-20250919-034914.jsonl",
+  "model": "merged",
+  "sanitized": false,
+  "turns": 56,
+  "created": "2025-09-19T03:49:14Z",
+  "updated": "2025-09-19T03:49:14Z",
+  "title": "Early archive (before Session 2025-09-19 03:28:59 UTC)",
+  "custom": false,
+  "sources": [
+    "session-20250919-023357",
+    "session-20250919-022410",
+    "session-20250919-015338",
+    "session-20250919-004910",
+    "session-20250914-011955",
+    "session-20250914-190450",
+    "session-merged-20250914-180435",
+    "session-merged-20250914-142912",
+    "session-20250914-010016",
+    "session-20250914-010137",
+    "session-20250913-234409",
+    "session-20250913-233505",
+    "session-20250913-233332",
+    "session-20250913-171357",
+    "session-20250913-171103",
+    "session-20250912-182455",
+    "session-20250912-181952",
+    "session-manual-001"
+  ],
+  "file_name": "session-early-archive-20250919-034914.jsonl",
+  "display_name": "Session Early Archive 20250919 034914",
+  "archive": {
+    "type": "early",
+    "latest_excluded_id": "session-20250919-032859",
+    "latest_excluded_display_name": "Session 2025-09-19 03:28:59 UTC",
+    "source_count": 18,
+    "generated": "2025-09-19T03:49:14Z"
+  }
+}
