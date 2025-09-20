@@ -55,6 +55,7 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - If no helper is set, the CLI asks you to choose one (from `CENTRAL_HELPERS` or defaults).
 - Paste multi-line content; each line echoes immediately. Finish by typing `END`.
 - CLI wraps paste as `[HELPER RESULT]...[/HELPER RESULT]`, sends to Central, and streams stitched output when `--stream` is enabled.
+- Default helper names you can use: CodeSmith, DataDive, ResearchSleuth, UIWhisperer, OpsSentinel, LegalEagle. Override with `CENTRAL_HELPERS="Name1,Name2"` if you prefer your own roster.
 
 ## First Prompt Experience
 
@@ -83,6 +84,21 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - Load a session: `python main.py --sessions-load session-20250913-234409`
 - Rename a session: `python main.py --sessions-rename session-20250914-010016 "My Project"`
 - Merge two sessions by index: `python main.py --sessions-merge 1 3`
+
+### Memory explorer (`noxl`)
+
+- `python -m noxl` — list recent sessions (use `--limit` to refine)
+- `python -m noxl --search TEXT` — filter by metadata or message content
+- `python -m noxl list --root memory/early-archives` — inspect alternate session roots
+- `python -m noxl --show <session>` — pretty-print a saved conversation (`--raw` for JSON)
+- `python -m noxl --latest` — view the latest session summary
+- `python -m noxl rename <session> "New Title"` — rename stored metadata
+- `python -m noxl merge A B --title "Merged"` — create a combined log
+- `python -m noxl archive` — move earlier sessions into `memory/early-archives/`
+- `python -m noxl meta <session>` — print the metadata JSON
+- `python -m noxl count --search TEXT` — count matching sessions
+
+Most subcommands accept `--root PATH` to switch between `memory/sessions` and other directories (for example `memory/early-archives`).
 
 ## Tab Completion
 

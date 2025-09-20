@@ -1,36 +1,34 @@
-"""CLI helper to explore stored conversation memories.
-
-This script surfaces the sessions captured under ``memory/sessions`` so they
-can be inspected without launching the full chat CLI.
-"""
+"""Importable session helpers and CLI utilities for the Noxl toolkit."""
 
 from __future__ import annotations
 
-import argparse
 import json
-import sys
+import argparse
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 
-from central.core import (
+from .sessions import (
+    ARCHIVE_ROOT,
+    SESSION_ROOT,
+    archive_early_sessions,
+    compute_title_from_messages,
     list_sessions,
     load_session_messages,
+    merge_sessions_paths,
     resolve_session,
+    set_session_title_for,
 )
 from interfaces.session_logger import format_session_display_name
 
-SESSION_ROOT = Path("memory/sessions")
-
 
 def load_meta(log_path: Path) -> Dict[str, Any]:
-    """Load the sidecar meta file if present, otherwise derive minimal info."""
+    """Load meta sidecar data or synthesize a minimal metadata dict."""
     meta_path = log_path.with_name(log_path.stem + ".meta.json")
     if meta_path.exists():
         try:
             return json.loads(meta_path.read_text(encoding="utf-8"))
         except Exception:
             pass
-    # Fallback info
     return {
         "id": log_path.stem,
         "path": str(log_path),
@@ -39,10 +37,17 @@ def load_meta(log_path: Path) -> Dict[str, Any]:
     }
 
 
-def iter_sessions(search: Optional[str] = None) -> Iterable[Dict[str, Any]]:
-    """Yield session info, optionally filtering by a search string."""
+def list_session_infos(root: Path = SESSION_ROOT) -> List[Dict[str, Any]]:
+    """Return session metadata dictionaries sorted newest first."""
+    return list_sessions(root)
+
+
+def iter_sessions(
+    search: Optional[str] = None, *, root: Path = SESSION_ROOT
+) -> Iterator[Dict[str, Any]]:
+    """Yield session dictionaries from ``root``, optionally filtered by content."""
     needle = (search or "").strip().lower()
-    for info in list_sessions(SESSION_ROOT):
+    for info in list_sessions(root):
         if not needle:
             yield info
             continue
@@ -65,8 +70,10 @@ def iter_sessions(search: Optional[str] = None) -> Iterable[Dict[str, Any]]:
             continue
 
 
-def print_session_table(items: Iterable[Dict[str, Any]], *, limit: Optional[int] = None) -> None:
-    """Pretty print a compact session table."""
+def print_session_table(
+    items: Iterable[Dict[str, Any]], *, limit: Optional[int] = None
+) -> None:
+    """Pretty-print a compact table of session metadata."""
     count = 0
     for idx, info in enumerate(items, 1):
         if limit is not None and count >= limit:
@@ -83,6 +90,7 @@ def print_session_table(items: Iterable[Dict[str, Any]], *, limit: Optional[int]
 
 
 def print_latest_session(info: Dict[str, Any]) -> None:
+    """Print a summary of the latest session entry."""
     display = info.get("display_name") or format_session_display_name(str(info.get("id")))
     title = info.get("title") or "(untitled)"
     updated = info.get("updated") or "?"
@@ -95,11 +103,13 @@ def print_latest_session(info: Dict[str, Any]) -> None:
     print(f"  path: {info.get('path')}")
 
 
-def show_session(ident: str, *, raw: bool = False) -> int:
-    """Display the conversation stored in a session."""
-    path = resolve_session(ident, SESSION_ROOT)
+def show_session(
+    ident: str, *, raw: bool = False, root: Path = SESSION_ROOT
+) -> int:
+    """Display a session conversation resolved within ``root``."""
+    path = resolve_session(ident, root)
     if path is None:
-        print(f"No session matches '{ident}'.", file=sys.stderr)
+        print(f"No session matches '{ident}'.")
         return 1
     messages = load_session_messages(path)
     if not messages:
@@ -132,52 +142,47 @@ def _count_lines(path: Path) -> int:
         return 0
 
 
-def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Inspect stored chat memories.")
-    parser.add_argument(
-        "--search",
-        metavar="TEXT",
-        help="Filter sessions whose metadata or content contains TEXT.",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=20,
-        help="Maximum sessions to list (default: 20).",
-    )
-    parser.add_argument(
-        "--show",
-        metavar="SESSION",
-        help="Show the contents of a session by id, stem, or path.",
-    )
-    parser.add_argument(
-        "--latest",
-        action="store_true",
-        help="Display only the most recently updated session summary and exit.",
-    )
-    parser.add_argument(
-        "--raw",
-        action="store_true",
-        help="Print raw JSON messages when used with --show.",
-    )
-    return parser.parse_args(argv)
+__all__ = [
+    "ARCHIVE_ROOT",
+    "SESSION_ROOT",
+    "archive_early_sessions",
+    "compute_title_from_messages",
+    "iter_sessions",
+    "list_session_infos",
+    "list_sessions",
+    "load_meta",
+    "load_session_messages",
+    "merge_sessions_paths",
+    "cli_build_parser",
+    "cli_main",
+    "cli_parse_args",
+    "print_latest_session",
+    "print_session_table",
+    "resolve_session",
+    "set_session_title_for",
+    "show_session",
+]
 
 
-def main(argv: Optional[List[str]] = None) -> int:
-    args = parse_args(argv)
-    if args.show:
-        return show_session(args.show, raw=args.raw)
-    if args.latest:
-        latest_list = list_sessions(SESSION_ROOT)
-        if not latest_list:
-            print("No sessions found.")
-            return 0
-        print_latest_session(latest_list[0])
-        return 0
-    items = iter_sessions(args.search)
-    print_session_table(items, limit=args.limit)
-    return 0
+def cli_build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
+    """Return the argparse parser used by the Noxl CLI."""
+
+    from .cli import build_parser as _build_parser
+
+    return _build_parser(prog=prog)
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def cli_parse_args(argv: Optional[List[str]] = None, *, prog: str = "noxl") -> argparse.Namespace:
+    """Parse command-line arguments using the CLI parser."""
+
+    from .cli import parse_args as _parse_args
+
+    return _parse_args(argv, prog=prog)
+
+
+def cli_main(argv: Optional[List[str]] = None) -> int:
+    """Run the Noxl CLI programmatically."""
+
+    from .cli import main as _main
+
+    return _main(argv)

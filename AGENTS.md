@@ -46,6 +46,14 @@ Import policy: prefer public functions across modules; avoid deep internals. Kee
 - `python main.py --sessions-rename session-YYYYMMDD-HHMMSS "My Title"`
 - `python main.py --sessions-archive-early`
 
+### Default helper roster
+- **CodeSmith** – code, APIs, debugging, refactors
+- **DataDive** – analytics, SQL/spreadsheets, KPIs
+- **ResearchSleuth** – research synthesis, briefs, comparisons
+- **UIWhisperer** – UX copy, product messaging, tone
+- **OpsSentinel** – infrastructure, automation, runbooks
+- **LegalEagle** – policy/compliance/contracts (guidance only)
+
 ## Commit & Pull Request Guidelines
 - Commits: Conventional Commits.
   - Examples: `feat(memory): add vector anchor lookup`, `fix(reasoning): guard null plan step`.

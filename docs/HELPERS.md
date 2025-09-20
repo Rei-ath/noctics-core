@@ -39,3 +39,16 @@ When Central asks for a helper and emits a `[HELPER QUERY]...[/HELPER QUERY]` bl
 
 - Set a helper label via `--helper NAME` or `/helper NAME`. The label appears in the prompt and helps track which helper provided the result.
 - If unset, you’ll be prompted to pick one when a helper is required.
+
+### Built-in helper roster
+
+Central ships with a default set of helper personas. You can type their names when prompted, or set them explicitly with `--helper` / `/helper`:
+
+- **CodeSmith** — deep coding support: implementation plans, API integration, debugging, refactors.
+- **DataDive** — analytics, spreadsheets, SQL, KPI reviews, lightweight statistical checks.
+- **ResearchSleuth** — synthesises sources, extracts facts, drafts briefs, compares documents.
+- **UIWhisperer** — UX copy, product messaging, tone-of-voice, onboarding flows.
+- **OpsSentinel** — infrastructure and automation help: deployment, runbooks, incident response.
+- **LegalEagle** — policy, compliance, contract language (non-binding guidance only).
+
+If you define your own roster, set `CENTRAL_HELPERS="NameOne,NameTwo"` and they’ll appear in the picker.

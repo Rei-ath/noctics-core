@@ -21,6 +21,8 @@ Central loads `.env` automatically from both the package folder and the current 
 - `CENTRAL_HELPER_ANON` (default `1`): show sanitized helper queries for safe sharing
 - `CENTRAL_REDACT_NAMES` (optional): comma-separated names to redact in helper queries
 - `CENTRAL_HELPERS` (optional): comma-separated helper names to present when choosing a helper
+- `CENTRAL_DEV_NAME` (optional): if set, used as your prompt label and appended as identity context (e.g., "The user 'Rei' is the developer of Noctics.")
+- `NOCTICS_PROJECT_NAME` (optional, default `Noctics`): used in the identity context above
 
 Example `.env`:
 
@@ -28,6 +30,8 @@ Example `.env`:
 CENTRAL_LLM_URL=http://localhost:1234/v1/chat/completions
 CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
 # CENTRAL_LLM_API_KEY=sk-...
+# CENTRAL_DEV_NAME=Rei
+# NOCTICS_PROJECT_NAME=Noctics
 ```
 
 ## Core Concepts
@@ -68,6 +72,16 @@ Privacy: When Central asks for a helper and emits a `[HELPER QUERY]` block, the 
 
 Selecting a helper: If you haven’t set `--helper`, the CLI will ask you to choose one when needed (from `CENTRAL_HELPERS` or a default list). You can type a number or a custom name.
 
+Built-in helper names (override with `CENTRAL_HELPERS`):
+- claude (Anthropic)
+- gpt-4o / gpt-4 (OpenAI)
+- grok (xAI)
+- gemini (Google)
+- llama (Meta)
+- mistral (Mistral AI)
+- cohere (Cohere)
+- deepseek (DeepSeek)
+
 First prompt: When you send the very first message, the CLI proposes a short session title based on your request, offers a chance to add clarifying details, and lets you accept or override the title before the request goes to Central.
 
 ## Sessions
@@ -85,6 +99,23 @@ First prompt: When you send the very first message, the CLI proposes a short ses
   - Interactive: `/sessions` or `/ls`; quick summary: `/last`; browse menu: `/browse`; pretty-print: `/show ID`; archive: `/archive`
 - Loading:
   - `--sessions-load ID_OR_PATH` or in chat `/load ID`
+
+### Memory explorer (`noxl`)
+
+- Quick list: `python -m noxl` (lists most recent sessions; `--limit N` to adjust)
+- Filter by text: `python -m noxl --search "error"`
+- Inspect a session: `python -m noxl --show session-YYYYMMDD-HHMMSS`
+- Show latest summary: `python -m noxl --latest`
+- Raw JSON dump: `python -m noxl --show <id> --raw`
+- Browse alternate roots: `python -m noxl list --root memory/early-archives`
+- Rename a session: `python -m noxl rename session-YYYYMMDD-HHMMSS "New Title"`
+- Merge sessions: `python -m noxl merge session-A session-B --title "Merged"`
+- Archive early sessions: `python -m noxl archive`
+- Show stored metadata: `python -m noxl meta session-YYYYMMDD-HHMMSS`
+- Count matches: `python -m noxl count --search helper`
+- Programmatic helpers: `from noxl import list_sessions, load_session_messages`
+
+Most commands accept `--root PATH` so you can target alternate directories (like `memory/early-archives`).
 
 More details: `docs/SESSIONS.md`.
 
@@ -112,6 +143,7 @@ print("log:", client.log_path())
 
 - `/helper NAME`: set helper label; `/helper` clears
 - `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`): paste helper result
+- `/iam-dev NAME`: mark yourself as the developer for this session (injects identity context)
 - `/sessions` or `/ls`: list saved sessions + titles
 - `/last`: show the most recently updated session
 - `/browse`: interactively list and view saved sessions

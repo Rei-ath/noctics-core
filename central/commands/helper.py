@@ -142,7 +142,18 @@ def get_helper_candidates() -> List[str]:
     Uses CENTRAL_HELPERS="a,b,c" if set, otherwise a small default list.
     """
     env_helpers = [s.strip() for s in (os.getenv("CENTRAL_HELPERS") or "").split(",") if s.strip()]
-    default_helpers = ["claude", "o3", "gpt-4o", "sonnet", "llama", "mistral"]
+    # Popular LLM/provider names as convenient defaults; override via CENTRAL_HELPERS
+    default_helpers = [
+        "claude",      # Anthropic
+        "gpt-4o",      # OpenAI
+        "gpt-4",       # OpenAI
+        "grok",        # xAI
+        "gemini",      # Google
+        "llama",       # Meta
+        "mistral",     # Mistral AI
+        "cohere",      # Cohere
+        "deepseek",    # DeepSeek
+    ]
     return env_helpers or default_helpers
 
 

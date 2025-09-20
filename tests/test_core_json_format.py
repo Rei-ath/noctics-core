@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from central.core import list_sessions, load_session_messages
+from noxl import list_sessions, load_session_messages
 
 
 def _write_json_session(dirpath: Path, stem: str, turns: int = 2) -> Path:

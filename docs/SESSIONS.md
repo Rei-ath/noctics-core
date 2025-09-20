@@ -35,6 +35,23 @@ Central logs every session to JSONL and writes a companion meta file that tracks
   - `python main.py --sessions-load session-YYYYMMDD-HHMMSS`
   - Or in chat: `/load` (interactive picker) or `/load ID`
 
+## Inspecting with `noxl`
+
+- List recent sessions: `python -m noxl` (use `--limit N` to change the count)
+- Search metadata/content: `python -m noxl --search "keyword"`
+- Inspect another root (e.g., archives): `python -m noxl list --root memory/early-archives`
+- Show latest summary: `python -m noxl --latest`
+- Pretty-print a session: `python -m noxl --show session-YYYYMMDD-HHMMSS`
+- Dump raw JSON messages: `python -m noxl --show <id> --raw`
+- Rename a session title: `python -m noxl rename session-YYYYMMDD-HHMMSS "New Title"`
+- Merge multiple sessions: `python -m noxl merge A B --title "Merged Title"`
+- Archive earlier sessions: `python -m noxl archive`
+- View stored metadata: `python -m noxl meta session-YYYYMMDD-HHMMSS`
+- Count matches: `python -m noxl count --search helper`
+- Library usage: `from noxl import list_sessions, load_session_messages, compute_title_from_messages`
+
+Tip: supply `--root PATH` (e.g., `--root memory/early-archives`) to operate on alternate session directories.
+
 ## Merging
 
 - Combine multiple sessions into a new merged session (keeps first system, concatenates user/assistant pairs):

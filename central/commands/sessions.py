@@ -5,23 +5,23 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from central.colors import color
-from central.core import (
-    list_sessions as core_list_sessions,
-    resolve_session,
+from noxl import (
+    archive_early_sessions as noxl_archive_early_sessions,
+    list_sessions as noxl_list_sessions,
     load_session_messages,
-    set_session_title_for,
     merge_sessions_paths,
-    archive_early_sessions as core_archive_early_sessions,
+    resolve_session,
+    set_session_title_for,
 )
 from interfaces.session_logger import format_session_display_name
 
 
 def list_sessions() -> List[Dict[str, object]]:
-    return core_list_sessions()
+    return noxl_list_sessions()
 
 
 def latest_session() -> Optional[Dict[str, object]]:
-    items = core_list_sessions()
+    items = noxl_list_sessions()
     return items[0] if items else None
 
 
@@ -56,7 +56,7 @@ def print_sessions(items: List[Dict[str, object]]) -> None:
 
 
 def resolve_by_ident_or_index(ident: str, items: Optional[List[Dict[str, object]]] = None) -> Optional[Path]:
-    items = items or core_list_sessions()
+    items = items or noxl_list_sessions()
     p: Optional[Path] = None
     if ident.isdigit():
         idx = int(ident)
@@ -67,7 +67,7 @@ def resolve_by_ident_or_index(ident: str, items: Optional[List[Dict[str, object]
 
 
 def load_into_context(ident: str, *, messages: List[Dict[str, object]]) -> Optional[List[Dict[str, object]]]:
-    items = core_list_sessions()
+    items = noxl_list_sessions()
     path = resolve_by_ident_or_index(ident, items)
     if not path:
         print(color(f"No session found for: {ident}", fg="red"))
@@ -80,7 +80,7 @@ def load_into_context(ident: str, *, messages: List[Dict[str, object]]) -> Optio
 
 
 def rename_session(ident: str, new_title: str) -> bool:
-    items = core_list_sessions()
+    items = noxl_list_sessions()
     path = resolve_by_ident_or_index(ident, items)
     if not path:
         print(color(f"No session found for: {ident}", fg="red"))
@@ -91,7 +91,7 @@ def rename_session(ident: str, new_title: str) -> bool:
 
 
 def merge_sessions(idents: List[str]) -> Optional[Path]:
-    items = core_list_sessions()
+    items = noxl_list_sessions()
     paths: List[Path] = []
     for ident in idents:
         p = resolve_by_ident_or_index(ident, items)
@@ -108,7 +108,7 @@ def merge_sessions(idents: List[str]) -> Optional[Path]:
 
 
 def archive_early_sessions() -> Optional[Path]:
-    out = core_archive_early_sessions()
+    out = noxl_archive_early_sessions()
     if out is None:
         print(color("Nothing to archive (need at least two sessions).", fg="yellow"))
         return None
@@ -118,7 +118,7 @@ def archive_early_sessions() -> Optional[Path]:
 
 
 def show_session(ident: str, *, raw: bool = False) -> bool:
-    items = core_list_sessions()
+    items = noxl_list_sessions()
     path = resolve_by_ident_or_index(ident, items)
     if not path:
         print(color(f"No session found for: {ident}", fg="red"))
@@ -168,7 +168,7 @@ def show_session(ident: str, *, raw: bool = False) -> bool:
 
 def browse_sessions() -> None:
     while True:
-        items = core_list_sessions()
+        items = noxl_list_sessions()
         if not items:
             print(color("No sessions found.", fg="yellow"))
             return
