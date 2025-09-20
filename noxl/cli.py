@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 from . import (
     ARCHIVE_ROOT,
@@ -85,6 +85,13 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print the raw metadata JSON instead of a friendly summary.",
+    )
+    latest_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
     )
 
     show_parser = subparsers.add_parser(
@@ -212,8 +219,8 @@ def _handle_list(search: Optional[str], limit: int, root: Path) -> int:
     return 0
 
 
-def _handle_latest(*, raw_json: bool = False) -> int:
-    latest = list_session_infos()
+def _handle_latest(*, raw_json: bool = False, root: Path = SESSION_ROOT) -> int:
+    latest = list_session_infos(root)
     if not latest:
         print("No sessions found.")
         return 0
@@ -225,6 +232,10 @@ def _handle_latest(*, raw_json: bool = False) -> int:
         return 0
     print_latest_session(info)
     return 0
+
+
+def _handle_show(session_ident: str, *, raw: bool, root: Path) -> int:
+    return show_session(session_ident, raw=raw, root=root)
 
 
 def _handle_rename(
@@ -303,44 +314,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     """Run the Noxl CLI entrypoint."""
     args = parse_args(argv)
 
-    if args.command == "show" or args.show:
-        session_ident = args.session if args.command == "show" else args.show
-        raw = args.raw if args.command == "show" else args.raw
-        root = getattr(args, "root", SESSION_ROOT)
-        return show_session(session_ident, raw=raw, root=root)
+    # Compatibility flags for legacy usage
+    if args.show:
+        return _handle_show(args.show, raw=args.raw, root=args.root)
+    if args.latest:
+        return _handle_latest(raw_json=False, root=args.root)
 
-    if args.command == "latest" or args.latest:
-        raw_json = bool(getattr(args, "json", False))
-        return _handle_latest(raw_json=raw_json)
+    dispatch: Dict[str, Callable[[argparse.Namespace], int]] = {
+        "list": lambda a: _handle_list(a.search, a.limit, a.root),
+        "latest": lambda a: _handle_latest(raw_json=a.json, root=a.root),
+        "show": lambda a: _handle_show(a.session, raw=a.raw, root=a.root),
+        "rename": lambda a: _handle_rename(a.session, a.title, auto=a.auto, root=a.root),
+        "merge": lambda a: _handle_merge(a.sessions, title=a.title, root=a.root),
+        "archive": lambda a: _handle_archive(
+            keep_sources=a.keep_sources,
+            root=a.root,
+            archive_root=a.archive_root,
+        ),
+        "meta": lambda a: _handle_meta(a.session, a.root),
+        "count": lambda a: _handle_count(a.search, a.root),
+    }
 
-    if args.command == "rename":
-        root = getattr(args, "root", SESSION_ROOT)
-        return _handle_rename(args.session, args.title, auto=args.auto, root=root)
-
-    if args.command == "merge":
-        return _handle_merge(args.sessions, title=args.title, root=args.root)
-
-    if args.command == "archive":
-        return _handle_archive(
-            keep_sources=args.keep_sources,
-            root=args.root,
-            archive_root=args.archive_root,
-        )
-
-    if args.command == "meta":
-        root = getattr(args, "root", SESSION_ROOT)
-        return _handle_meta(args.session, root)
-
-    if args.command == "count":
-        search = getattr(args, "search", None)
-        root = getattr(args, "root", SESSION_ROOT)
-        return _handle_count(search, root)
-
-    # Default to listing sessions
-    search = getattr(args, "search", None)
-    limit = getattr(args, "limit", 20)
-    root = getattr(args, "root", SESSION_ROOT)
-    return _handle_list(search, limit, root)
+    command = args.command or "list"
+    handler = dispatch.get(command)
+    if handler is None:
+        return _handle_list(args.search, args.limit, args.root)
+    return handler(args)
 
 
 __all__ = ["build_parser", "parse_args", "main"]
