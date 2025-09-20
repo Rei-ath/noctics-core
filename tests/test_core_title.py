@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from central.core import compute_title_from_messages
+from noxl import compute_title_from_messages
 
 
 def test_compute_title_skips_helper_and_limits_words():
@@ -34,4 +34,3 @@ def test_compute_title_skips_helper_and_limits_words():
 def test_compute_title_returns_none_when_no_user():
     msgs = [{"role": "system", "content": "sys"}]
     assert compute_title_from_messages(msgs) is None
-

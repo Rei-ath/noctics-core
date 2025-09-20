@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from central.core import archive_early_sessions, list_sessions
+from noxl import archive_early_sessions, list_sessions
 from interfaces.session_logger import format_session_display_name
 
 
 def _write_session(root: Path, day: str, stem: str, *, updated: str, title: str) -> Path:
     day_dir = root / day
     day_dir.mkdir(parents=True, exist_ok=True)
-    log_path = day_dir / f"{stem}.jsonl"
+    log_path = day_dir / f"{stem}.json"
     record = {
         "messages": [
             {"role": "system", "content": "sys"},
@@ -24,7 +24,7 @@ def _write_session(root: Path, day: str, stem: str, *, updated: str, title: str)
             "ts": updated,
         },
     }
-    log_path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    log_path.write_text(json.dumps([record], ensure_ascii=False, indent=2), encoding="utf-8")
 
     meta = {
         "id": stem,

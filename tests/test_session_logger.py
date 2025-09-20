@@ -46,3 +46,33 @@ def test_session_logger_creates_files_and_updates_meta(tmp_path: Path):
     meta_entry = data[0].get("meta", {})
     assert meta_entry.get("file_name") == log_path.name
     assert meta_entry.get("display_name") == meta1.get("display_name")
+
+
+def test_session_logger_load_existing_appends(tmp_path: Path):
+    base = tmp_path
+    logger1 = SessionLogger(model="test", sanitized=False, dirpath=base)
+    logger1.start()
+    logger1.log_turn(
+        [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "u1"},
+            {"role": "assistant", "content": "a1"},
+        ]
+    )
+    log_path = logger1.log_path()
+    assert log_path is not None
+
+    logger2 = SessionLogger(model="test", sanitized=False, dirpath=base)
+    logger2.load_existing(log_path)
+    logger2.log_turn(
+        [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "u2"},
+            {"role": "assistant", "content": "a2"},
+        ]
+    )
+
+    data = json.loads(log_path.read_text(encoding="utf-8"))
+    assert isinstance(data, list)
+    assert len(data) == 2
+    assert data[1]["messages"][1]["content"] == "u2"

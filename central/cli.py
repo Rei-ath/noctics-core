@@ -24,7 +24,8 @@ except Exception:  # pragma: no cover - platform without readline
 from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
 from .colors import color
-from .core import ChatClient, compute_title_from_messages, load_session_messages
+from .core import ChatClient
+from noxl import compute_title_from_messages, load_session_messages
 from .commands.completion import setup_completions
 from .commands.helper import (
     manual_helper_stream,
@@ -107,113 +108,109 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--url",
+        "-U", "--url",
         default=os.getenv("CENTRAL_LLM_URL", DEFAULT_URL),
         help="Endpoint URL (env CENTRAL_LLM_URL)",
     )
     parser.add_argument(
-        "--model",
+        "-M", "--model",
         default=os.getenv("CENTRAL_LLM_MODEL", "qwen/qwen3-1.7b"),
         help="Model name (env CENTRAL_LLM_MODEL)",
     )
     parser.add_argument(
-        "--system",
+        "-S", "--system",
         default=None,
         help="System message (defaults to memory/system_prompt.txt; ignored if --messages is used)",
     )
-    parser.add_argument("--user", default=None, help="Optional initial user message")
+    parser.add_argument("-u", "--user", default=None, help="Optional initial user message")
     parser.add_argument(
-        "--messages",
+        "-F", "--messages",
         dest="messages_file",
         default=None,
         help="Path to JSON file containing a messages array to send",
     )
-    parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    parser.add_argument("-t", "--temperature", type=float, default=0.7, help="Sampling temperature")
     parser.add_argument(
-        "--max-tokens",
+        "-T", "--max-tokens",
         dest="max_tokens",
         type=int,
         default=-1,
         help="Max tokens (-1 for unlimited if supported)",
     )
-    parser.add_argument("--stream", action="store_true", help="Enable streaming (SSE)")
+    parser.add_argument("-s", "--stream", action="store_true", help="Enable streaming (SSE)")
     parser.add_argument(
-        "--sanitize",
+        "-z", "--sanitize",
         action="store_true",
         help="Redact common PII from user text before sending",
     )
-    parser.add_argument("--raw", action="store_true", help="Also print raw JSON in non-streaming mode")
+    parser.add_argument("-r", "--raw", action="store_true", help="Also print raw JSON in non-streaming mode")
     parser.add_argument(
-        "--api-key",
+        "-k", "--api-key",
         default=(os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")),
         help="Optional API key for Authorization header (env CENTRAL_LLM_API_KEY | OPENAI_API_KEY)",
     )
     parser.add_argument(
-        "--helper",
+        "-H", "--helper",
         default=None,
         help=(
-            "Optional helper name. When set, API calls are skipped and you will be "
-            "prompted to paste the external helper's response manually."
+            "Optional helper name label used when Central requests a helper; "
+            "does not skip API calls."
         ),
     )
     parser.add_argument(
-        "--manual",
+        "-m", "--manual",
         action="store_true",
         help=(
-            "Manual response mode. Skip API calls and prompt to paste the assistant/" 
-            "helper response each turn. If --helper is provided, it implies --manual."
+            "Manual response mode. Skip API calls and prompt to paste the "
+            "assistant/helper response each turn."
         ),
     )
     parser.add_argument(
-        "--sessions-ls",
-        "--sessions",
-        "--list-sessions",
-        "--ls",
-        "--seeessions-ls",  # friendly alias for common typo
+        "-L", "--sessions-ls",
         dest="sessions_ls",
         action="store_true",
         help="List saved sessions with titles and exit",
     )
     parser.add_argument(
-        "--sessions-load",
+        "-D", "--sessions-load",
         metavar="ID_OR_PATH",
         default=None,
         help="Load a session's messages before starting chat (by id or path)",
     )
     parser.add_argument(
-        "--sessions-rename",
+        "-R", "--sessions-rename",
         nargs=2,
         metavar=("ID_OR_PATH", "NEW_TITLE"),
         default=None,
         help="Rename (retitle) a saved session and exit",
     )
     parser.add_argument(
-        "--sessions-merge",
+        "-G", "--sessions-merge",
         nargs="+",
         metavar="ID_OR_INDEX",
         default=None,
         help="Merge sessions (ids or indices) into a new merged folder and exit",
     )
     parser.add_argument(
-        "--sessions-latest",
+        "-E", "--sessions-latest",
         dest="sessions_latest",
         action="store_true",
         help="Show the most recently updated session and exit",
     )
     parser.add_argument(
-        "--sessions-archive-early",
+        "-A", "--sessions-archive-early",
         dest="sessions_archive_early",
         action="store_true",
         help="Merge all but the latest session into memory/early-archives and exit",
     )
     parser.add_argument(
-        "--sessions-browse",
+        "-B", "--sessions-browse",
         dest="sessions_browse",
         action="store_true",
         help="Interactively browse saved sessions and view their contents",
     )
     parser.add_argument(
-        "--sessions-show",
+        "-P", "--sessions-show",
         metavar="ID_OR_PATH",
         dest="sessions_show",
         default=None,
@@ -254,6 +251,26 @@ def main(argv: List[str]) -> int:
     load_local_dotenv(Path(__file__).resolve().parent)
 
     args = parse_args(argv)
+
+    # Build a consistent developer identity context line
+    def build_identity_context(name: str, project: str) -> str:
+        return (
+            f"Context: The user '{name}' is the developer of {project}. "
+            f"Address them as {name}. Allowed disclosure: if asked who your developer is "
+            f"(or whether you know your developer), answer directly that it is {name}. "
+            f"In normal replies, prefer their name over 'the user'; continue to anonymize when preparing "
+            f"[HELPER QUERY] blocks."
+        )
+
+    # If a developer name is provided, prefer it as the user label
+    dev_name = os.getenv("CENTRAL_DEV_NAME") or os.getenv("NOCTICS_DEV_NAME")
+    # If not explicitly set, recognize the local developer alias 'Rei'
+    if not dev_name:
+        user_env_name = os.getenv("CENTRAL_USER_NAME") or args.user_name
+        if user_env_name and user_env_name.strip().lower() == "rei":
+            dev_name = user_env_name.strip()
+    if dev_name and (not args.user_name or args.user_name.strip().lower() in {"you", "user"}):
+        args.user_name = dev_name.strip()
 
     # Session management commands (non-interactive)
     if args.sessions_ls:
@@ -314,6 +331,7 @@ def main(argv: List[str]) -> int:
 
     # Initialize conversation messages
     messages: List[Dict[str, Any]]
+    session_path_to_adopt: Optional[Path] = None
     if args.messages_file:
         with open(args.messages_file, "r", encoding="utf-8") as f:
             messages = json.load(f)
@@ -348,6 +366,7 @@ def main(argv: List[str]) -> int:
             sys_msgs = [m for m in messages if m.get("role") == "system"]
             if sys_msgs:
                 args.system = sys_msgs[0].get("content")
+        session_path_to_adopt = path
         print(color(f"Loaded session: {path.stem}", fg="yellow"))
 
     # Determine and display system prompt at startup (colored)
@@ -359,6 +378,38 @@ def main(argv: List[str]) -> int:
             sys_prompt_text = str(sys_msgs[-1].get("content", "")).strip() or None
     else:
         sys_prompt_text = args.system
+
+    # Optionally inject identity context if a developer name is configured
+    identity_line: Optional[str] = None
+    if dev_name:
+        project = os.getenv("NOCTICS_PROJECT_NAME", "Noctics")
+        identity_line = build_identity_context(dev_name, project)
+        # Update the last system message if any; otherwise insert one
+        idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            m = messages[i]
+            if isinstance(m, dict) and m.get("role") == "system":
+                idx = i
+                break
+        if idx is not None:
+            content = str(messages[idx].get("content") or "").strip()
+            content = (content + "\n\n" + identity_line).strip()
+            messages[idx]["content"] = content
+        else:
+            messages.insert(0, {"role": "system", "content": identity_line})
+        # Keep args.system in sync for resets
+        if args.system:
+            args.system = (args.system + "\n\n" + identity_line).strip()
+        else:
+            args.system = identity_line
+
+    if (sys_prompt_text or identity_line):
+        # Recompute for display after any identity injection
+        if args.messages_file:
+            sys_msgs = [m for m in messages if isinstance(m, dict) and m.get("role") == "system"]
+            sys_prompt_text = str(sys_msgs[-1].get("content", "")).strip() if sys_msgs else None
+        else:
+            sys_prompt_text = args.system
 
     if sys_prompt_text:
         print(color("System Prompt:", fg="magenta", bold=True))
@@ -378,8 +429,36 @@ def main(argv: List[str]) -> int:
         enable_logging=True,
     )
 
+    # Early connectivity check unless in manual/helper mode
+    if not (args.manual or args.helper):
+        try:
+            client.check_connectivity()
+        except Exception as e:  # network-specific; present friendly guidance
+            print(color("Error: cannot reach Noctics Central.", fg="red", bold=True))
+            print(color(f"{e}", fg="red"))
+            print(
+                color(
+                    "Tip: start your local OpenAI-compatible server on the configured URL, "
+                    "or run with --manual to paste responses, or set CENTRAL_LLM_URL.",
+                    fg="yellow",
+                )
+            )
+            return 2
+
+    def adopt_session(path: Path) -> None:
+        nonlocal title_confirmed, first_prompt_handled
+        client.maybe_delete_empty_session()
+        client.adopt_session_log(path)
+        title_confirmed = bool(client.get_session_title())
+        first_prompt_handled = True
+
+    if session_path_to_adopt is not None:
+        adopt_session(session_path_to_adopt)
+
     title_confirmed = bool(client.get_session_title())
     first_prompt_handled = any(m.get("role") == "user" for m in client.messages)
+    if session_path_to_adopt is not None:
+        first_prompt_handled = True
 
     def prepare_first_prompt_text(user_text: str, *, allow_interactive: bool) -> str:
         nonlocal title_confirmed, first_prompt_handled
@@ -438,51 +517,12 @@ def main(argv: List[str]) -> int:
     # ----------
     setup_completions()
 
-    def _manual_helper_stream(helper_name: Optional[str]) -> str:
-        """Collect helper output interactively, echoing as a stream.
-
-        User types/pastes lines; each line is echoed immediately. Typing
-        a single END line finishes input. Returns the concatenated text.
-        """
-        helper_label = f" [{helper_name}]" if helper_name else ""
-        print(color(f"Helper{helper_label}:", fg="blue", bold=True) + " ", end="", flush=True)
-        print(
-            color(
-                "(paste streaming lines; type END on its own line to finish)",
-                fg="yellow",
-            )
-        )
-        collected: List[str] = []
-        while True:
-            try:
-                line = input()
-            except EOFError:
-                break
-            if line.strip() == "END":
-                break
-            # Echo the line as part of the stream
-            print(line)
-            collected.append(line)
-        return "\n".join(collected).strip()
-
-    def _process_helper_result(helper_text: str) -> Optional[str]:
-        if not helper_text:
-            return None
-        if args.stream:
-            print("\n" + color("Noctics Central (processing helper):", fg="#ffefff", bold=True) + " ", end="", flush=True)
-            reply = client.process_helper_result(helper_text, on_delta=_printer())
-            print()
-            return reply
-        else:
-            reply = client.process_helper_result(helper_text)
-            if reply is not None:
-                print(reply)
-            return reply
+    # Note: manual_helper_stream and process_helper_result helpers are imported from central.commands.helper
 
     # Helper to perform a single turn given a user prompt
     def one_turn(user_text: str) -> Optional[str]:
-        # Determine if we're in manual paste mode
-        manual_mode = bool(args.manual or args.helper)
+        # Determine if we're in manual paste mode (helper label alone no longer implies manual)
+        manual_mode = bool(args.manual)
 
         if manual_mode:
             helper_label = f" [{args.helper}]" if args.helper else ""
@@ -510,7 +550,13 @@ def main(argv: List[str]) -> int:
 
         # Normal API mode via core client
         if args.stream:
-            assistant = client.one_turn(user_text, on_delta=_printer())
+            try:
+                assistant = client.one_turn(user_text, on_delta=_printer())
+            except Exception as e:
+                print()
+                print(color("Request failed:", fg="red", bold=True))
+                print(color(f"{e}", fg="red"))
+                return None
             print()
             if assistant is not None and ChatClient.wants_helper(assistant):
                 if args.anon_helper:
@@ -539,7 +585,12 @@ def main(argv: List[str]) -> int:
                     return final_assistant
             return assistant
         else:
-            assistant = client.one_turn(user_text)
+            try:
+                assistant = client.one_turn(user_text)
+            except Exception as e:
+                print(color("Request failed:", fg="red", bold=True))
+                print(color(f"{e}", fg="red"))
+                return None
             if assistant is not None:
                 print(assistant)
                 if ChatClient.wants_helper(assistant):
@@ -590,26 +641,6 @@ def main(argv: List[str]) -> int:
         one_turn(initial_user)
 
     # Interactive loop
-    def _print_help() -> None:
-        print(color("Type 'exit' or 'quit' to end. Use /reset to clear context.", fg="yellow"))
-        lp = client.log_path()
-        if lp:
-            print(color(f"Logging session to: {lp}", fg="yellow"))
-        print(color("Commands:", fg="yellow"))
-        print(color("  /help          show this help", fg="yellow"))
-        print(color("  /helper NAME   set helper label & enable paste", fg="yellow"))
-        print(color("  /helper        clear helper label", fg="yellow"))
-        print(color("  /result        paste a Helper Result to stitch", fg="yellow"))
-        print(color("  /sessions      list saved sessions with titles", fg="yellow"))
-        print(color("  /load ID       load a session by id", fg="yellow"))
-        print(color("  /title NAME    set current session title", fg="yellow"))
-        print(color("  /rename ID T   rename a saved session's title", fg="yellow"))
-        print(color("  /merge A B..   merge sessions by ids or indices", fg="yellow"))
-        print(color("  /reset         reset context to just the system message", fg="yellow"))
-        print(color("  /name NAME     set the input prompt label (default: You)", fg="yellow"))
-        print(color("Docs: README.md, docs/CLI.md, docs/SESSIONS.md, docs/HELPERS.md", fg="yellow"))
-        print(color("Tip: run with --help to see all CLI flags.", fg="yellow"))
-
     cmd_print_help(client, user_name=args.user_name)
     if sys.stdin.isatty() and readline is not None:
         print(color("[Tab completion enabled: type '/' then press Tab]", fg="yellow"))
@@ -623,7 +654,7 @@ def main(argv: List[str]) -> int:
                 continue
             if prompt.lower() in {"exit", "quit"}:
                 break
-            if prompt.lower() in {"/help", "help", "/?", "/h"}:
+            if prompt.lower() in {"/help"}:
                 cmd_print_help(client, user_name=args.user_name)
                 continue
             if prompt.strip() == "/reset":
@@ -631,18 +662,36 @@ def main(argv: List[str]) -> int:
                 client.reset_messages(system=args.system)
                 print(color("Context reset.", fg="yellow"))
                 continue
+            if prompt.startswith("/iam ") or prompt.strip() == "/iam":
+                parts = prompt.split(maxsplit=1)
+                new_name = parts[1].strip() if len(parts) > 1 else args.user_name
+                if not new_name:
+                    print(color("Usage: /iam NAME", fg="yellow"))
+                    continue
+                args.user_name = new_name
+                # Update developer identity context and append as latest system message
+                project = os.getenv("NOCTICS_PROJECT_NAME", "Noctics")
+                ident = build_identity_context(new_name, project)
+                client.messages.append({"role": "system", "content": ident})
+                # Also reflect in args.system for future resets
+                if args.system:
+                    args.system = (args.system + "\n\n" + ident).strip()
+                else:
+                    args.system = ident
+                print(color(f"Developer identity set: {new_name}", fg="yellow"))
+                continue
             if prompt.startswith("/helper"):
                 parts = prompt.split(maxsplit=1)
                 if len(parts) == 1:
                     # Clear helper and disable manual if it was only implied by helper
                     args.helper = None
-                    print(color("Helper cleared. API mode restored (unless --manual).", fg="yellow"))
+                    print(color("Helper cleared. API mode unchanged.", fg="yellow"))
                 else:
                     args.helper = parts[1].strip()
-                    print(color(f"Helper set to '{args.helper}'. Manual paste mode enabled.", fg="yellow"))
+                    print(color(f"Helper set to '{args.helper}'. API mode unchanged; used when helper is requested.", fg="yellow"))
                 continue
 
-            if prompt.startswith("/bypass") or prompt.strip() in {"/bypass-helper", "/act-as-central", "/iam-central"}:
+            if prompt.startswith("/bypass"):
                 tokens = prompt.split()
                 if len(tokens) == 1:
                     args.bypass_helper = not bool(args.bypass_helper)
@@ -660,7 +709,7 @@ def main(argv: List[str]) -> int:
                     print(color(f"Prompt label set to: {args.user_name}", fg="yellow"))
                 continue
 
-            if prompt.startswith("/anon") or prompt.strip() in {"/anon-helper", "/anon"}:
+            if prompt.startswith("/anon"):
                 tokens = prompt.split()
                 if len(tokens) == 1:
                     args.anon_helper = not bool(args.anon_helper)
@@ -671,13 +720,13 @@ def main(argv: List[str]) -> int:
                 print(color(f"Helper anonymization: {state}", fg="yellow"))
                 continue
 
-            if prompt.strip() in {"/sessions", "/ls", "/sessions-ls", "/list", "/list-sessions"}:
+            if prompt.strip() == "/ls":
                 items = cmd_list_sessions()
                 cmd_print_sessions(items)
                 print(color("Tip: load by index: /load N", fg="yellow"))
                 continue
 
-            if prompt.strip() in {"/last", "/latest", "/recent"}:
+            if prompt.strip() == "/last":
                 latest = cmd_latest_session()
                 if not latest:
                     print(color("No sessions found.", fg="yellow"))
@@ -685,7 +734,7 @@ def main(argv: List[str]) -> int:
                     cmd_print_latest_session(latest)
                 continue
 
-            if prompt.strip() in {"/archive", "/archive-early", "/archive-old"}:
+            if prompt.strip() == "/archive":
                 cmd_archive_early_sessions()
                 continue
 
@@ -695,7 +744,7 @@ def main(argv: List[str]) -> int:
                     continue
                 continue
 
-            if prompt.strip() in {"/browse", "/sessions-browse"}:
+            if prompt.strip() == "/browse":
                 cmd_browse_sessions()
                 continue
 
@@ -711,6 +760,9 @@ def main(argv: List[str]) -> int:
                 # print name by resolving for display
                 p = cmd_resolve_by_ident_or_index(ident)
                 print(color(f"Loaded session: {p.stem if p else ident}", fg="yellow"))
+                path_for_adopt = p if p else (Path(ident) if Path(ident).exists() else None)
+                if path_for_adopt is not None:
+                    adopt_session(path_for_adopt)
                 continue
 
             if prompt.strip() == "/load":
@@ -736,6 +788,9 @@ def main(argv: List[str]) -> int:
                 p = cmd_resolve_by_ident_or_index(selection)
                 display = p.stem if p else selection
                 print(color(f"Loaded session: {display}", fg="yellow"))
+                path_for_adopt = p if p else (Path(selection) if Path(selection).exists() else None)
+                if path_for_adopt is not None:
+                    adopt_session(path_for_adopt)
                 continue
 
             if prompt.startswith("/merge "):

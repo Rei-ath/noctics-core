@@ -1,0 +1,346 @@
+"""Command-line interface helpers for the Noxl memory browser."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+from typing import Iterable, List, Optional
+
+from . import (
+    ARCHIVE_ROOT,
+    SESSION_ROOT,
+    archive_early_sessions,
+    iter_sessions,
+    list_session_infos,
+    merge_sessions_paths,
+    print_latest_session,
+    print_session_table,
+    resolve_session,
+    set_session_title_for,
+    show_session,
+)
+
+
+def _add_list_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--search",
+        metavar="TEXT",
+        help="Filter sessions whose metadata or content contains TEXT.",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum sessions to list (default: 20).",
+    )
+    parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
+    )
+
+
+def _path_arg(value: str) -> Path:
+    return Path(value).expanduser()
+
+
+def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
+    """Construct the Noxl CLI argument parser."""
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="Browse or manage persisted Noctics chat memories.",
+    )
+    _add_list_options(parser)
+    parser.add_argument(
+        "--show",
+        metavar="SESSION",
+        help="Show the contents of a session by id, stem, or path (compat mode).",
+    )
+    parser.add_argument(
+        "--latest",
+        action="store_true",
+        help="Display only the most recently updated session summary and exit.",
+    )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Print raw JSON messages when used with --show.",
+    )
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List saved sessions (default command).",
+    )
+    _add_list_options(list_parser)
+
+    latest_parser = subparsers.add_parser(
+        "latest",
+        help="Show the most recently updated session and exit.",
+    )
+    latest_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the raw metadata JSON instead of a friendly summary.",
+    )
+
+    show_parser = subparsers.add_parser(
+        "show",
+        help="Pretty-print a session conversation by id or path.",
+    )
+    show_parser.add_argument("session", metavar="SESSION")
+    show_parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Print raw JSON messages instead of a formatted view.",
+    )
+    show_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
+    )
+
+    rename_parser = subparsers.add_parser(
+        "rename",
+        help="Rename a saved session's title.",
+    )
+    rename_parser.add_argument("session", metavar="SESSION")
+    rename_parser.add_argument("title", nargs="+", metavar="TITLE")
+    rename_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Mark the title as auto-generated instead of custom.",
+    )
+    rename_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
+    )
+
+    merge_parser = subparsers.add_parser(
+        "merge",
+        help="Merge multiple sessions into a new combined log.",
+    )
+    merge_parser.add_argument("sessions", nargs="+", metavar="SESSION")
+    merge_parser.add_argument(
+        "--title",
+        metavar="TEXT",
+        help="Optional title to apply to the merged session.",
+    )
+    merge_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Destination root directory for the merged session (default: memory/sessions).",
+    )
+
+    archive_parser = subparsers.add_parser(
+        "archive",
+        help="Archive all but the most recent session into early-archives.",
+    )
+    archive_parser.add_argument(
+        "--keep-sources",
+        action="store_true",
+        help="Do not delete the original session files after archiving.",
+    )
+    archive_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
+    )
+    archive_parser.add_argument(
+        "--archive-root",
+        metavar="PATH",
+        type=_path_arg,
+        default=ARCHIVE_ROOT,
+        help="Archive destination directory (default: memory/early-archives).",
+    )
+
+    meta_parser = subparsers.add_parser(
+        "meta",
+        help="Show the stored metadata for a session as JSON.",
+    )
+    meta_parser.add_argument("session", metavar="SESSION")
+    meta_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
+    )
+
+    count_parser = subparsers.add_parser(
+        "count",
+        help="Print the number of known sessions (after optional filtering).",
+    )
+    count_parser.add_argument(
+        "--search",
+        metavar="TEXT",
+        help="Filter sessions before counting (matches metadata fields).",
+    )
+    count_parser.add_argument(
+        "--root",
+        metavar="PATH",
+        type=_path_arg,
+        default=SESSION_ROOT,
+        help="Sessions root directory (default: memory/sessions).",
+    )
+
+    parser.set_defaults(command="list")
+    return parser
+
+
+def parse_args(argv: Optional[List[str]] = None, *, prog: str = "noxl") -> argparse.Namespace:
+    """Parse CLI arguments for the Noxl memory browser."""
+    parser = build_parser(prog=prog)
+    return parser.parse_args(argv)
+
+
+def _handle_list(search: Optional[str], limit: int, root: Path) -> int:
+    items = iter_sessions(search, root=root)
+    print_session_table(items, limit=limit)
+    return 0
+
+
+def _handle_latest(*, raw_json: bool = False) -> int:
+    latest = list_session_infos()
+    if not latest:
+        print("No sessions found.")
+        return 0
+    info = latest[0]
+    if raw_json:
+        import json
+
+        print(json.dumps(info, ensure_ascii=False, indent=2))
+        return 0
+    print_latest_session(info)
+    return 0
+
+
+def _handle_rename(
+    session_ident: str,
+    title_parts: Iterable[str],
+    *,
+    auto: bool,
+    root: Path,
+) -> int:
+    path = resolve_session(session_ident, root)
+    if path is None:
+        print(f"No session matches '{session_ident}'.")
+        return 1
+    title = " ".join(str(part) for part in title_parts).strip()
+    if not title:
+        print("Title cannot be empty.")
+        return 1
+    set_session_title_for(path, title, custom=not auto)
+    flag = "(auto)" if auto else "(custom)"
+    print(f"Renamed {path.stem} -> '{title}' {flag}")
+    return 0
+
+
+def _handle_merge(idents: List[str], *, title: Optional[str], root: Path) -> int:
+    paths = []
+    for ident in idents:
+        path = resolve_session(ident, root)
+        if path is None:
+            print(f"Skipping unknown session: {ident}")
+            continue
+        paths.append(path)
+    if len(paths) < 2:
+        print("Need at least two sessions to merge.")
+        return 1
+    out_path = merge_sessions_paths(paths, title=title, root=root)
+    print(f"Merged {len(paths)} sessions into: {out_path}")
+    return 0
+
+
+def _handle_archive(*, keep_sources: bool, root: Path, archive_root: Path) -> int:
+    out_path = archive_early_sessions(
+        root=root,
+        archive_root=archive_root,
+        delete_sources=not keep_sources,
+    )
+    if out_path is None:
+        print("Nothing to archive (need at least two sessions).")
+        return 0
+    print(f"Archived early sessions at: {out_path}")
+    if keep_sources:
+        print("Sources retained (keep-sources).")
+    return 0
+
+
+def _handle_meta(session_ident: str, root: Path) -> int:
+    path = resolve_session(session_ident, root)
+    if path is None:
+        print(f"No session matches '{session_ident}'.")
+        return 1
+    from . import load_meta
+
+    info = load_meta(path)
+    import json
+
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _handle_count(search: Optional[str], root: Path) -> int:
+    count = sum(1 for _ in iter_sessions(search, root=root))
+    print(count)
+    return 0
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Run the Noxl CLI entrypoint."""
+    args = parse_args(argv)
+
+    if args.command == "show" or args.show:
+        session_ident = args.session if args.command == "show" else args.show
+        raw = args.raw if args.command == "show" else args.raw
+        root = getattr(args, "root", SESSION_ROOT)
+        return show_session(session_ident, raw=raw, root=root)
+
+    if args.command == "latest" or args.latest:
+        raw_json = bool(getattr(args, "json", False))
+        return _handle_latest(raw_json=raw_json)
+
+    if args.command == "rename":
+        root = getattr(args, "root", SESSION_ROOT)
+        return _handle_rename(args.session, args.title, auto=args.auto, root=root)
+
+    if args.command == "merge":
+        return _handle_merge(args.sessions, title=args.title, root=args.root)
+
+    if args.command == "archive":
+        return _handle_archive(
+            keep_sources=args.keep_sources,
+            root=args.root,
+            archive_root=args.archive_root,
+        )
+
+    if args.command == "meta":
+        root = getattr(args, "root", SESSION_ROOT)
+        return _handle_meta(args.session, root)
+
+    if args.command == "count":
+        search = getattr(args, "search", None)
+        root = getattr(args, "root", SESSION_ROOT)
+        return _handle_count(search, root)
+
+    # Default to listing sessions
+    search = getattr(args, "search", None)
+    limit = getattr(args, "limit", 20)
+    root = getattr(args, "root", SESSION_ROOT)
+    return _handle_list(search, limit, root)
+
+
+__all__ = ["build_parser", "parse_args", "main"]

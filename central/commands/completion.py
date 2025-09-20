@@ -8,7 +8,8 @@ try:
 except Exception:  # pragma: no cover
     readline = None  # type: ignore
 
-from central.core import list_sessions
+from noxl import list_sessions
+from central.commands.helper import get_helper_candidates
 
 
 def setup_completions() -> None:
@@ -22,26 +23,28 @@ def setup_completions() -> None:
     except Exception:
         return
 
+    # Canonical, de-duplicated slash commands
     commands = [
         "/help",
         "/reset",
-        "/sessions",
         "/ls",
         "/last",
         "/result",
+        "/iam",
         "/helper",
         "/anon",
-        "/anon-helper",
         "/load",
         "/title",
         "/rename",
         "/merge",
         "/name",
+        "/archive",
+        "/show",
+        "/browse",
+        
     ]
 
-    env_helpers = [s.strip() for s in (os.getenv("CENTRAL_HELPERS") or "").split(",") if s.strip()]
-    default_helpers = ["claude", "o3", "gpt-4o", "sonnet", "llama", "mistral"]
-    helper_candidates = env_helpers or default_helpers
+    helper_candidates = get_helper_candidates()
 
     def session_suggestions() -> List[str]:
         items = list_sessions()
@@ -72,7 +75,7 @@ def setup_completions() -> None:
                 return matches[state] if state < len(matches) else None
             return None
 
-        if head in {"/load", "/rename", "/merge"}:
+        if head in {"/load", "/rename", "/merge", "/show"}:
             if beg >= len(head) + 1 and arg_index == 0:
                 candidates = session_suggestions()
                 matches = [c for c in candidates if c.startswith(text or "")]

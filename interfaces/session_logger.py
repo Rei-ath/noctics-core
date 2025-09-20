@@ -108,6 +108,28 @@ class SessionLogger:
             )
         self._write_meta()
 
+    def load_existing(self, log_path: Path) -> None:
+        self._file = log_path
+        self._meta_file = log_path.with_name(log_path.stem + ".meta.json")
+        self.dirpath = log_path.parent.parent
+        try:
+            data = json.loads(log_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = []
+        self._records = data if isinstance(data, list) else []
+        self._turn = len(self._records)
+        if self._meta_file.exists():
+            try:
+                meta = json.loads(self._meta_file.read_text(encoding="utf-8"))
+            except Exception:
+                meta = {}
+            self._title = meta.get("title")
+            self._title_custom = bool(meta.get("custom", False))
+            if not self._display_name:
+                self._display_name = meta.get("display_name")
+        if not self._display_name:
+            self._display_name = format_session_display_name(log_path.stem)
+
     # -----------------
     # Meta sidecar utils
     # -----------------
