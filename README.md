@@ -47,6 +47,9 @@ CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
   - `python main.py --stream`
 - Manual assistant replies for every turn (no API):
   - `python main.py --manual`
+- When Central is unreachable and you are in an interactive shell, the CLI auto-switches to manual mode so you can paste replies.
+- Show the model's raw `<think>` reasoning (hidden by default):
+  - `python main.py --show-think`
 - Name a helper (implies manual paste prompt when needed):
   - `python main.py --helper claude`
 - List saved sessions and titles:

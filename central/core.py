@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from urllib.parse import urlparse
 import socket
+import re
 
 from interfaces.pii import sanitize as pii_sanitize
 from interfaces.session_logger import SessionLogger
@@ -84,6 +85,48 @@ def build_payload(
     }
 
 
+_THINK_PATTERN = re.compile(r"<think>.*?</think>\s*", re.IGNORECASE | re.DOTALL)
+
+
+def strip_chain_of_thought(text: Optional[str]) -> Optional[str]:
+    """Remove <think>...</think> segments while preserving public content."""
+
+    if text is None:
+        return None
+    cleaned = _THINK_PATTERN.sub("", text)
+    return cleaned.strip()
+
+
+def _extract_public_segments(buffer: str) -> Tuple[str, str]:
+    """Return (public_text, remainder) preserving incomplete <think> regions."""
+
+    lower = buffer.lower()
+    pos = 0
+    public_parts: List[str] = []
+    length = len(buffer)
+    open_tag = "<think>"
+    close_tag = "</think>"
+    open_len = len(open_tag)
+    close_len = len(close_tag)
+
+    while pos < length:
+        open_idx = lower.find(open_tag, pos)
+        if open_idx == -1:
+            # No more think segments; entire remainder is public
+            public_parts.append(buffer[pos:])
+            return "".join(public_parts), ""
+        # Append text before the think block
+        public_parts.append(buffer[pos:open_idx])
+        close_search_start = open_idx + open_len
+        close_idx = lower.find(close_tag, close_search_start)
+        if close_idx == -1:
+            # Incomplete think block; keep remainder for later
+            return "".join(public_parts), buffer[open_idx:]
+        pos = close_idx + close_len
+
+    return "".join(public_parts), ""
+
+
 class ChatClient:
     """Stateful chat client for Central.
 
@@ -105,6 +148,7 @@ class ChatClient:
         sanitize: bool = False,
         messages: Optional[List[Dict[str, Any]]] = None,
         enable_logging: bool = True,
+        strip_reasoning: bool = True,
     ) -> None:
         # Ensure .env is loaded when core is used as a library
         try:
@@ -122,6 +166,7 @@ class ChatClient:
         self.logger = SessionLogger(model=self.model, sanitized=bool(self.sanitize)) if enable_logging else None
         if self.logger:
             self.logger.start()
+        self.strip_reasoning = strip_reasoning
 
     # ---------------------
     # Connectivity / health
@@ -332,13 +377,36 @@ class ChatClient:
         data = json.dumps(payload).encode("utf-8")
         req = Request(self.url, data=data, headers=self._headers(), method="POST")
 
+        public_state: Dict[str, Any] = {}
         if self.stream:
-            assistant = self._stream_sse(req, on_delta)
+            stream_callback = on_delta
+            if self.strip_reasoning and on_delta:
+                public_state = {"buffer": "", "public": ""}
+
+                def sanitized_delta(piece: str) -> None:
+                    state = public_state
+                    state_buffer = state["buffer"] + piece
+                    public, remainder = _extract_public_segments(state_buffer)
+                    state["buffer"] = remainder
+                    prev_public = state["public"]
+                    if len(public) > len(prev_public):
+                        on_delta(public[len(prev_public):])
+                        state["public"] = public
+
+                stream_callback = sanitized_delta
+
+            assistant = self._stream_sse(req, stream_callback)
         else:
             assistant, _ = self._request_non_streaming(req)
 
         # Output/log and retain state
         if assistant is not None:
+            if self.strip_reasoning:
+                assistant = strip_chain_of_thought(assistant)
+                if self.stream and on_delta and public_state:
+                    public_text = public_state.get("public", "")
+                    if len(assistant) > len(public_text):
+                        on_delta(assistant[len(public_text):])
             self.messages.append({"role": "user", "content": to_send_user})
             self.messages.append({"role": "assistant", "content": assistant})
             if self.logger:
@@ -353,6 +421,8 @@ class ChatClient:
     def record_turn(self, user_text: str, assistant_text: str) -> None:
         """Record a manual assistant response without calling the API."""
         to_send_user = pii_sanitize(user_text) if self.sanitize else user_text
+        if self.strip_reasoning:
+            assistant_text = strip_chain_of_thought(assistant_text)
         self.messages.append({"role": "user", "content": to_send_user})
         self.messages.append({"role": "assistant", "content": assistant_text})
         if self.logger:
@@ -391,6 +461,8 @@ class ChatClient:
             reply, _ = self._request_non_streaming(req)
 
         if reply is not None:
+            if self.strip_reasoning:
+                reply = strip_chain_of_thought(reply)
             self.messages.append({"role": "user", "content": helper_wrapped})
             self.messages.append({"role": "assistant", "content": reply})
             if self.logger:

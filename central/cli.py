@@ -145,6 +145,11 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     )
     parser.add_argument("-r", "--raw", action="store_true", help="Also print raw JSON in non-streaming mode")
     parser.add_argument(
+        "--show-think",
+        action="store_true",
+        help="Include assistant <think> blocks in console output and session logs.",
+    )
+    parser.add_argument(
         "-k", "--api-key",
         default=(os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")),
         help="Optional API key for Authorization header (env CENTRAL_LLM_API_KEY | OPENAI_API_KEY)",
@@ -427,6 +432,7 @@ def main(argv: List[str]) -> int:
         sanitize=bool(args.sanitize),
         messages=messages,
         enable_logging=True,
+        strip_reasoning=not bool(args.show_think),
     )
 
     # Early connectivity check unless in manual/helper mode
@@ -434,16 +440,25 @@ def main(argv: List[str]) -> int:
         try:
             client.check_connectivity()
         except Exception as e:  # network-specific; present friendly guidance
-            print(color("Error: cannot reach Noctics Central.", fg="red", bold=True))
+            print(color("Warning: cannot reach Noctics Central.", fg="red", bold=True))
             print(color(f"{e}", fg="red"))
+            if not sys.stdin.isatty():
+                print(
+                    color(
+                        "Tip: start your local OpenAI-compatible server on the configured URL "
+                        "or re-run with --manual to paste responses.",
+                        fg="yellow",
+                    )
+                )
+                return 2
             print(
                 color(
-                    "Tip: start your local OpenAI-compatible server on the configured URL, "
-                    "or run with --manual to paste responses, or set CENTRAL_LLM_URL.",
+                    "Falling back to manual mode. Paste assistant responses when prompted.",
                     fg="yellow",
                 )
             )
-            return 2
+            args.manual = True
+            args.stream = False
 
     def adopt_session(path: Path) -> None:
         nonlocal title_confirmed, first_prompt_handled
@@ -556,6 +571,11 @@ def main(argv: List[str]) -> int:
                 print()
                 print(color("Request failed:", fg="red", bold=True))
                 print(color(f"{e}", fg="red"))
+                if sys.stdin.isatty():
+                    print(color("Switching to manual mode for this turn.", fg="yellow"))
+                    args.manual = True
+                    args.stream = False
+                    return one_turn(user_text)
                 return None
             print()
             if assistant is not None and ChatClient.wants_helper(assistant):
@@ -590,6 +610,11 @@ def main(argv: List[str]) -> int:
             except Exception as e:
                 print(color("Request failed:", fg="red", bold=True))
                 print(color(f"{e}", fg="red"))
+                if sys.stdin.isatty():
+                    print(color("Switching to manual mode for this turn.", fg="yellow"))
+                    args.manual = True
+                    args.stream = False
+                    return one_turn(user_text)
                 return None
             if assistant is not None:
                 print(assistant)
