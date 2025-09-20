@@ -19,6 +19,7 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `--manual`: Manual mode; paste assistant responses (skip API calls)
 - `--bypass-helper`: Bypass helper stitching; you paste the final response (acts as Central)
 - `--anon-helper` / `--no-anon-helper`: Show (or disable) a sanitized copy of the `[HELPER QUERY]` for safe sharing with helpers. Default ON (can be set via `CENTRAL_HELPER_ANON=0`).
+- `--show-think`: Include the assistant’s `<think>` reasoning blocks in output/logs (hidden by default).
 - `--sessions-ls`: List saved sessions (with titles) and exit
 - `--sessions-latest`: Show the most recently updated session and exit
 - `--sessions-archive-early`: Merge all but the latest session into `memory/early-archives/` and exit
@@ -77,6 +78,7 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 
 - Stream with helper stitching: `python main.py --stream`
 - Manual assistant everywhere: `python main.py --manual`
+- If Central cannot be reached, the interactive CLI automatically falls back to manual mode so you can paste assistant replies.
 - Name a helper and stream: `python main.py --helper claude --stream`
 - One-off question with stream: `python main.py --user "Explain vector clocks" --stream`
 - Provide messages array: `python main.py --messages msgs.json --stream`
