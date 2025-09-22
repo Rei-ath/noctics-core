@@ -1,0 +1,15 @@
+{
+  "id": "session-20250920-173701",
+  "path": "memory/users/demo/sessions/2025-09-20/session-20250920-173701.json",
+  "model": "qwen/qwen3-1.7b",
+  "sanitized": false,
+  "turns": 2,
+  "created": "2025-09-20T17:37:01Z",
+  "updated": "2025-09-20T17:37:01Z",
+  "title": "Self Loop 1",
+  "custom": true,
+  "file_name": "session-20250920-173701.json",
+  "display_name": "Session 2025-09-20 17:37:01 UTC",
+  "user_id": "demo",
+  "user_display": "Demo User"
+}

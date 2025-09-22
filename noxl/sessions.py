@@ -11,6 +11,10 @@ from interfaces.session_logger import format_session_display_name
 
 SESSION_ROOT = Path("memory/sessions")
 ARCHIVE_ROOT = Path("memory/early-archives")
+USERS_ROOT = Path("memory/users")
+USER_META_FILENAME = "user.json"
+SESSION_SUBDIR = "sessions"
+DEFAULT_USER_ID = "default"
 
 
 def compute_title_from_messages(messages: List[Dict[str, Any]]) -> Optional[str]:
@@ -51,23 +55,53 @@ def _session_files_for_day(day_dir: Path) -> Dict[str, Path]:
     return files
 
 
-def list_sessions(root: Path = SESSION_ROOT) -> List[Dict[str, Any]]:
-    """Return session metadata dictionaries sorted newest first."""
-    items: List[Dict[str, Any]] = []
-    if not root.exists():
-        return items
+def list_sessions(
+    root: Path = SESSION_ROOT,
+    *,
+    user: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Return session metadata dictionaries sorted newest first.
 
-    for day_dir in sorted(root.iterdir() if root.is_dir() else [], reverse=True):
-        if not day_dir.is_dir():
+    The ``root`` may point to a legacy session directory or to a base directory
+    containing per-user subdirectories. When ``user`` is supplied, only sessions
+    belonging to that user id/display-name are returned.
+    """
+
+    contexts = _discover_user_contexts(root)
+    if user:
+        matcher = user.lower()
+        contexts = [
+            ctx
+            for ctx in contexts
+            if matcher in {ctx["user_id"].lower(), ctx["user_display"].lower()}
+        ]
+
+    items: List[Dict[str, Any]] = []
+    for ctx in contexts:
+        session_root: Path = ctx["session_root"]
+        if not session_root.exists():
             continue
-        file_map = _session_files_for_day(day_dir)
-        for log_path in file_map.values():
-            meta_path = _meta_path_for(log_path)
-            if meta_path.exists():
-                info = _read_info_with_meta(log_path, meta_path)
-            else:
-                info = _fallback_info_without_meta(log_path)
-            items.append(info)
+
+        entries = sorted(session_root.iterdir(), reverse=True)
+        directories = [entry for entry in entries if entry.is_dir()]
+
+        if directories:
+            day_iterable = directories
+        else:
+            day_iterable = [session_root]
+
+        for day_dir in day_iterable:
+            file_map = _session_files_for_day(day_dir)
+            for log_path in file_map.values():
+                meta_path = _meta_path_for(log_path)
+                if meta_path.exists():
+                    info = _read_info_with_meta(log_path, meta_path)
+                else:
+                    info = _fallback_info_without_meta(log_path)
+                info["user_id"] = ctx["user_id"]
+                info["user_display"] = ctx["user_display"]
+                info.setdefault("user_meta", ctx["user_meta"])
+                items.append(info)
 
     items.sort(key=_info_sort_key, reverse=True)
     return items
@@ -157,16 +191,25 @@ def _count_lines(log_path: Path) -> int:
 
 def resolve_session(identifier: str, root: Path = SESSION_ROOT) -> Optional[Path]:
     """Resolve a session JSON/JSONL path by stem or explicit filesystem path."""
+
     path_candidate = Path(identifier)
     if path_candidate.exists():
         return path_candidate
 
-    for day_dir in root.iterdir() if root.exists() else []:
-        if not day_dir.is_dir():
+    for ctx in _discover_user_contexts(root):
+        session_root: Path = ctx["session_root"]
+        if not session_root.exists():
             continue
-        for log_path in _session_files_for_day(day_dir).values():
-            if log_path.stem == identifier or log_path.stem.endswith(identifier):
-                return log_path
+        entries = list(session_root.iterdir())
+        directories = [entry for entry in entries if entry.is_dir()]
+        if directories:
+            search_iter = directories
+        else:
+            search_iter = [session_root]
+        for day_dir in search_iter:
+            for log_path in _session_files_for_day(day_dir).values():
+                if log_path.stem == identifier or log_path.stem.endswith(identifier):
+                    return log_path
     return None
 
 
@@ -175,7 +218,7 @@ def load_session_messages(log_path: Path) -> List[Dict[str, Any]]:
     messages: List[Dict[str, Any]] = []
     system_set = False
     try:
-        records = _load_records(log_path)
+        records = load_session_records(log_path)
         for obj in records:
             turn_msgs = obj.get("messages") or []
             if not system_set:
@@ -192,7 +235,7 @@ def load_session_messages(log_path: Path) -> List[Dict[str, Any]]:
     return messages
 
 
-def _load_records(log_path: Path) -> List[Dict[str, Any]]:
+def load_session_records(log_path: Path) -> List[Dict[str, Any]]:
     if log_path.suffix == ".json":
         try:
             data = json.loads(log_path.read_text(encoding="utf-8"))
@@ -212,6 +255,98 @@ def _load_records(log_path: Path) -> List[Dict[str, Any]]:
                 continue
             records.append(obj)
     return records
+
+
+def session_has_dialogue(log_path: Path) -> bool:
+    for obj in load_session_records(log_path):
+        msgs = obj.get("messages") if isinstance(obj, dict) else None
+        if not msgs:
+            continue
+        if any(m.get("role") in {"user", "assistant"} for m in msgs if isinstance(m, dict)):
+            return True
+    return False
+
+
+def delete_session_if_empty(
+    log_path: Path, *, meta_path: Optional[Path] = None
+) -> bool:
+    meta_path = meta_path or _meta_path_for(log_path)
+    try:
+        if meta_path and meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                meta = {}
+            if meta.get("turns"):
+                return False
+        if session_has_dialogue(log_path):
+            return False
+    except FileNotFoundError:
+        return False
+
+    log_path.unlink(missing_ok=True)
+    if meta_path:
+        meta_path.unlink(missing_ok=True)
+    try:
+        log_path.parent.rmdir()
+    except OSError:
+        pass
+    return True
+
+
+def append_session_to_day_log(
+    log_path: Path,
+    *,
+    meta: Optional[Dict[str, Any]] = None,
+) -> Optional[Path]:
+    records = load_session_records(log_path)
+    if not records:
+        return None
+
+    if meta is None:
+        meta_path = _meta_path_for(log_path)
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                meta = {}
+        else:
+            meta = {}
+    else:
+        meta = dict(meta)
+
+    meta.setdefault("id", log_path.stem)
+    meta.setdefault("path", str(log_path))
+    meta.setdefault("file_name", log_path.name)
+    meta.setdefault("display_name", format_session_display_name(log_path.stem))
+
+    day_dir = log_path.parent
+    day_log = day_dir / "day.json"
+    try:
+        if day_log.exists():
+            day_data = json.loads(day_log.read_text(encoding="utf-8"))
+            if not isinstance(day_data, list):
+                day_data = []
+        else:
+            day_data = []
+    except Exception:
+        day_data = []
+
+    session_id = str(meta.get("id") or log_path.stem)
+    day_data = [entry for entry in day_data if entry.get("id") != session_id]
+    day_data.append(
+        {
+            "id": session_id,
+            "title": meta.get("title"),
+            "custom": meta.get("custom"),
+            "path": str(log_path),
+            "records": records,
+            "meta": meta,
+        }
+    )
+
+    day_log.write_text(json.dumps(day_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return day_log
 
 
 def _group_user_assistant_pairs(messages: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
@@ -259,7 +394,7 @@ def merge_sessions_paths(
     date_dir = root / ("merged-" + now_utc.date().isoformat())
     date_dir.mkdir(parents=True, exist_ok=True)
     timestamp = now_utc.strftime("%Y%m%d-%H%M%S")
-    out_log = date_dir / f"session-merged-{timestamp}.json"
+    out_log = date_dir / f"session-merged-{timestamp}.jsonl"
     out_meta = out_log.with_name(out_log.stem + ".meta.json")
 
     sys_msg = next((msg for msg in combined if msg.get("role") == "system"), None)
@@ -281,7 +416,9 @@ def merge_sessions_paths(
             },
         }
         records.append(rec)
-    out_log.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    with out_log.open("w", encoding="utf-8") as handle:
+        for rec in records:
+            handle.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     if title is None:
         parts: List[str] = []
@@ -348,7 +485,7 @@ def archive_early_sessions(
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     archive_stem = f"session-early-archive-{timestamp}"
-    archive_log = merged_path.with_name(f"{archive_stem}.json")
+    archive_log = merged_path.with_name(f"{archive_stem}.jsonl")
     merged_path.rename(archive_log)
 
     merged_meta_path = merged_path.with_name(merged_path.stem + ".meta.json")
@@ -445,17 +582,134 @@ def set_session_title_for(log_path: Path, title: str, *, custom: bool = True) ->
     meta["updated"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     meta.setdefault("file_name", log_path.name)
     meta.setdefault("display_name", format_session_display_name(log_path.stem))
+    user_meta = user_meta_for_path(log_path)
+    meta["user_id"] = user_meta.get("id")
+    meta["user_display"] = user_meta.get("display_name")
+    meta.setdefault("user_meta", user_meta)
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 __all__ = [
     "ARCHIVE_ROOT",
     "SESSION_ROOT",
+    "USERS_ROOT",
+    "append_session_to_day_log",
     "archive_early_sessions",
+    "delete_session_if_empty",
     "compute_title_from_messages",
     "list_sessions",
+    "load_session_records",
     "load_session_messages",
     "merge_sessions_paths",
+    "session_has_dialogue",
     "resolve_session",
     "set_session_title_for",
+    "user_meta_for_path",
 ]
+
+
+def _discover_user_contexts(root: Path) -> List[Dict[str, Any]]:
+    """Return contexts describing each user accessible from ``root``."""
+
+    contexts: List[Dict[str, Any]] = []
+    if not root.exists():
+        return contexts
+
+    # Legacy: root directly stores session day directories
+    if _looks_like_session_store(root):
+        contexts.append(_build_context_for_session_root(root, DEFAULT_USER_ID))
+        return contexts
+
+    # Prefer explicit user directories
+    for child in sorted([p for p in root.iterdir() if p.is_dir()]):
+        if child.name == SESSION_SUBDIR and _looks_like_session_store(child):
+            contexts.append(_build_context_for_session_root(child, DEFAULT_USER_ID))
+            continue
+
+        if _looks_like_session_store(child):
+            contexts.append(_build_context_for_session_root(child))
+            continue
+
+        session_root = child / SESSION_SUBDIR
+        if _looks_like_session_store(session_root):
+            contexts.append(_build_context_for_user_root(child, session_root))
+
+    # Fallback to legacy top-level sessions directory if no contexts were found
+    if not contexts and root != SESSION_ROOT and SESSION_ROOT.exists():
+        contexts.append(_build_context_for_session_root(SESSION_ROOT, DEFAULT_USER_ID))
+
+    return contexts
+
+
+def user_meta_for_path(path: Path) -> Dict[str, Any]:
+    """Return user metadata inferred from a session log path."""
+
+    user_root = _find_user_root(path)
+    fallback = DEFAULT_USER_ID if user_root == SESSION_ROOT else None
+    return _load_user_meta(user_root, fallback=fallback)
+
+
+def _looks_like_session_store(path: Path) -> bool:
+    if not path.exists() or not path.is_dir():
+        return False
+    for child in path.iterdir():
+        if child.is_dir() and child.name[:4].isdigit():
+            return True
+        if child.is_file() and child.name.startswith("session-"):
+            return True
+    return False
+
+
+def _build_context_for_session_root(session_root: Path, fallback_user_id: Optional[str] = None) -> Dict[str, Any]:
+    user_root = session_root.parent if session_root.name == SESSION_SUBDIR else session_root
+    meta = _load_user_meta(user_root, fallback=fallback_user_id)
+    return {
+        "user_root": user_root,
+        "session_root": session_root,
+        "user_id": meta["id"],
+        "user_display": meta.get("display_name") or meta["id"],
+        "user_meta": meta,
+    }
+
+
+def _build_context_for_user_root(user_root: Path, session_root: Path) -> Dict[str, Any]:
+    meta = _load_user_meta(user_root)
+    return {
+        "user_root": user_root,
+        "session_root": session_root,
+        "user_id": meta["id"],
+        "user_display": meta.get("display_name") or meta["id"],
+        "user_meta": meta,
+    }
+
+
+def _load_user_meta(user_root: Path, fallback: Optional[str] = None) -> Dict[str, Any]:
+    meta_path = user_root / USER_META_FILENAME
+    data: Dict[str, Any]
+    if meta_path.exists():
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+    else:
+        data = {}
+    if not data.get("id"):
+        data["id"] = fallback or user_root.name
+    data.setdefault("display_name", data["id"].replace("_", " "))
+    data.setdefault("path", str(user_root))
+    return data
+
+
+def _find_user_root(path: Path) -> Path:
+    current = path.resolve()
+    for parent in [current] + list(current.parents):
+        if parent.name == SESSION_SUBDIR and parent.parent != parent:
+            if parent.parent.parent == USERS_ROOT:
+                return parent.parent
+        if parent == SESSION_ROOT:
+            return SESSION_ROOT
+        if parent == ARCHIVE_ROOT:
+            return parent
+        if parent.parent == USERS_ROOT:
+            return parent
+    return current.parent if current != current.parent else SESSION_ROOT

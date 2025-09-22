@@ -90,7 +90,7 @@ First prompt: When you send the very first message, the CLI proposes a short ses
 ## Sessions
 
 - Storage: `memory/sessions/YYYY-MM-DD/`
-  - Turns: `session-*.json` (array of turn records)
+  - Turns: `session-*.jsonl` (JSON Lines turn records; legacy `.json` files still load)
   - Day aggregate: `day.json` (auto-appended when sessions close; deduped)
   - Meta: `session-*.meta.json` (title, turns, created/updated, etc.)
 - Titles:

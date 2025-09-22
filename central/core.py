@@ -14,8 +14,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from pathlib import Path
 from datetime import datetime, timezone
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
+from urllib.error import URLError
 from urllib.parse import urlparse
 import socket
 import re
@@ -23,7 +22,12 @@ import re
 from interfaces.pii import sanitize as pii_sanitize
 from interfaces.session_logger import SessionLogger
 from interfaces.dotenv import load_local_dotenv
-from noxl import compute_title_from_messages
+from noxl import (
+    append_session_to_day_log as noxl_append_session_to_day_log,
+    compute_title_from_messages,
+    delete_session_if_empty as noxl_delete_session_if_empty,
+)
+from .transport import LLMTransport
 
 
 DEFAULT_URL = "http://localhost:1234/v1/chat/completions"
@@ -149,21 +153,41 @@ class ChatClient:
         messages: Optional[List[Dict[str, Any]]] = None,
         enable_logging: bool = True,
         strip_reasoning: bool = True,
+        memory_user: Optional[str] = None,
+        memory_user_display: Optional[str] = None,
+        transport: Optional[LLMTransport] = None,
     ) -> None:
         # Ensure .env is loaded when core is used as a library
         try:
             load_local_dotenv(Path(__file__).resolve().parent)
         except Exception:
             pass
-        self.url = url or os.getenv("CENTRAL_LLM_URL", DEFAULT_URL)
+        resolved_url = url or os.getenv("CENTRAL_LLM_URL", DEFAULT_URL)
+        resolved_api_key = api_key or (os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
+        if transport is None:
+            self.transport = LLMTransport(resolved_url, resolved_api_key)
+        else:
+            self.transport = transport
+            resolved_url = transport.url
+            resolved_api_key = transport.api_key
+        self.url = resolved_url
         self.model = model
-        self.api_key = api_key or (os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
+        self.api_key = resolved_api_key
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.stream = stream
         self.sanitize = sanitize
         self.messages: List[Dict[str, Any]] = list(messages or [])
-        self.logger = SessionLogger(model=self.model, sanitized=bool(self.sanitize)) if enable_logging else None
+        self.logger = (
+            SessionLogger(
+                model=self.model,
+                sanitized=bool(self.sanitize),
+                user_id=memory_user,
+                user_display=memory_user_display,
+            )
+            if enable_logging
+            else None
+        )
         if self.logger:
             self.logger.start()
         self.strip_reasoning = strip_reasoning
@@ -248,114 +272,6 @@ class ChatClient:
             return True
         return False
 
-    # --------------------
-    # Network interactions
-    # --------------------
-    def _headers(self) -> Dict[str, str]:
-        h = {"Content-Type": "application/json"}
-        if self.api_key:
-            h["Authorization"] = f"Bearer {self.api_key}"
-        return h
-
-    def _request_non_streaming(self, req: Request) -> Tuple[Optional[str], Dict[str, Any]]:
-        try:
-            with urlopen(req) as resp:  # nosec - local/dev usage
-                charset = resp.headers.get_content_charset() or "utf-8"
-                body = resp.read().decode(charset)
-        except HTTPError as he:  # pragma: no cover - network specific
-            # Read body for diagnostics if available
-            try:
-                body = he.read().decode("utf-8", errors="replace")
-            except Exception:
-                body = ""
-            status = getattr(he, "code", None)
-            reason = getattr(he, "reason", "HTTP error")
-            msg = f"HTTP {status or ''} {reason} from Central endpoint"
-            if status == 401:
-                msg += ": unauthorized (set CENTRAL_LLM_API_KEY or OPENAI_API_KEY?)"
-            elif status == 404:
-                msg += ": endpoint not found (URL path invalid?)"
-            raise HTTPError(req.full_url, he.code, msg + (f"\n{body}" if body else ""), he.headers, he.fp)
-        except URLError as ue:  # pragma: no cover - network specific
-            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
-        except OSError as oe:  # pragma: no cover - network specific
-            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
-
-        try:
-            obj = json.loads(body)
-        except Exception as je:
-            raise URLError(f"Central returned non-JSON response: {je}\nBody: {body[:512]}")  # pragma: no cover
-        try:
-            text = obj["choices"][0]["message"].get("content")
-        except Exception:
-            text = None
-        return text, obj
-
-    def _stream_sse(self, req: Request, on_delta: Optional[Callable[[str], None]] = None) -> str:
-        try:
-            with urlopen(req) as resp:  # nosec - local/dev usage
-                charset = resp.headers.get_content_charset() or "utf-8"
-                buffer: List[str] = []
-                acc: List[str] = []
-                while True:
-                    line_bytes = resp.readline()
-                    if not line_bytes:
-                        break
-                    line = line_bytes.decode(charset, errors="replace").rstrip("\r\n")
-
-                    if not line:
-                        if not buffer:
-                            continue
-                        data_str = "\n".join(buffer).strip()
-                        buffer.clear()
-                        if not data_str:
-                            continue
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            evt = json.loads(data_str)
-                        except Exception:
-                            piece = data_str
-                        else:
-                            try:
-                                choice = (evt.get("choices") or [{}])[0]
-                                delta = choice.get("delta") or {}
-                                piece = delta.get("content")
-                                if piece is None:
-                                    piece = (choice.get("message") or {}).get("content")
-                                if piece is None:
-                                    piece = choice.get("text")
-                            except Exception:
-                                piece = None
-
-                        if piece:
-                            if on_delta:
-                                on_delta(piece)
-                            acc.append(piece)
-                        continue
-
-                    if line.startswith(":"):
-                        continue
-                    if line.startswith("data:"):
-                        buffer.append(line[len("data:"):].lstrip())
-                        continue
-                    continue
-        except HTTPError as he:  # pragma: no cover - network specific
-            status = getattr(he, "code", None)
-            reason = getattr(he, "reason", "HTTP error")
-            msg = f"HTTP {status or ''} {reason} during stream from Central"
-            if status == 401:
-                msg += ": unauthorized (set CENTRAL_LLM_API_KEY or OPENAI_API_KEY?)"
-            elif status == 404:
-                msg += ": endpoint not found (URL path invalid?)"
-            raise HTTPError(req.full_url, he.code, msg, he.headers, he.fp)
-        except URLError as ue:  # pragma: no cover - network specific
-            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
-        except OSError as oe:  # pragma: no cover - network specific
-            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
-
-        return "".join(acc)
-
     # -------------
     # Public API
     # -------------
@@ -374,8 +290,6 @@ class ChatClient:
             max_tokens=self.max_tokens,
             stream=bool(self.stream),
         )
-        data = json.dumps(payload).encode("utf-8")
-        req = Request(self.url, data=data, headers=self._headers(), method="POST")
 
         public_state: Dict[str, Any] = {}
         if self.stream:
@@ -395,9 +309,9 @@ class ChatClient:
 
                 stream_callback = sanitized_delta
 
-            assistant = self._stream_sse(req, stream_callback)
+            assistant, _ = self.transport.send(payload, stream=True, on_chunk=stream_callback)
         else:
-            assistant, _ = self._request_non_streaming(req)
+            assistant, _ = self.transport.send(payload, stream=False)
 
         # Output/log and retain state
         if assistant is not None:
@@ -452,13 +366,11 @@ class ChatClient:
             max_tokens=self.max_tokens,
             stream=bool(self.stream),
         )
-        data = json.dumps(payload).encode("utf-8")
-        req = Request(self.url, data=data, headers=self._headers(), method="POST")
 
         if self.stream:
-            reply = self._stream_sse(req, on_delta)
+            reply, _ = self.transport.send(payload, stream=True, on_chunk=on_delta)
         else:
-            reply, _ = self._request_non_streaming(req)
+            reply, _ = self.transport.send(payload, stream=False)
 
         if reply is not None:
             if self.strip_reasoning:
@@ -477,6 +389,21 @@ class ChatClient:
     # -----------------
     # Diagnostics / info
     # -----------------
+    def describe_target(self) -> Dict[str, Any]:
+        """Return a sanitized snapshot of the configured target LLM."""
+
+        return {
+            "url": self.url,
+            "model": self.model,
+            "stream": bool(self.stream),
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "sanitize": bool(self.sanitize),
+            "strip_reasoning": bool(self.strip_reasoning),
+            "logging_enabled": self.logger is not None,
+            "has_api_key": bool(self.api_key),
+        }
+
     def log_path(self) -> Optional[Path]:
         """Return the current session log file path, if logging is enabled."""
         if not self.logger:
@@ -490,52 +417,7 @@ class ChatClient:
         if not path or not path.exists():
             return False
         meta_path = self.logger.meta_path()
-        try:
-            if meta_path and meta_path.exists():
-                data = json.loads(meta_path.read_text(encoding="utf-8"))
-                if data.get("turns"):
-                    return False
-            if path.suffix == ".json":
-                try:
-                    records = json.loads(path.read_text(encoding="utf-8"))
-                except Exception:
-                    records = []
-                for obj in records or []:
-                    msgs = obj.get("messages") if isinstance(obj, dict) else None
-                    if not msgs:
-                        continue
-                    has_user = any(m.get("role") == "user" for m in msgs)
-                    has_asst = any(m.get("role") == "assistant" for m in msgs)
-                    if has_user or has_asst:
-                        return False
-            else:
-                with path.open("r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            obj = json.loads(line)
-                        except Exception:
-                            obj = None
-                        if obj and obj.get("messages"):
-                            msgs = obj["messages"]
-                            has_user = any(m.get("role") == "user" for m in msgs)
-                            has_asst = any(m.get("role") == "assistant" for m in msgs)
-                            if has_user or has_asst:
-                                return False
-        except FileNotFoundError:
-            return False
-
-        path.unlink(missing_ok=True)
-        if meta_path:
-            meta_path.unlink(missing_ok=True)
-        try:
-            parent = path.parent
-            parent.rmdir()
-        except OSError:
-            pass
-        return True
+        return noxl_delete_session_if_empty(path, meta_path=meta_path)
 
     def append_session_to_day_log(self) -> Optional[Path]:
         if not self.logger:
@@ -543,40 +425,8 @@ class ChatClient:
         log_path = self.logger.log_path()
         if not log_path or not log_path.exists():
             return None
-        try:
-            records = json.loads(log_path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
-        if not isinstance(records, list) or not records:
-            return None
-
         meta = self.logger.get_meta()
-        day_dir = log_path.parent
-        day_log = day_dir / "day.json"
-        try:
-            if day_log.exists():
-                day_data = json.loads(day_log.read_text(encoding="utf-8"))
-                if not isinstance(day_data, list):
-                    day_data = []
-            else:
-                day_data = []
-        except Exception:
-            day_data = []
-
-        session_id = log_path.stem
-        day_data = [entry for entry in day_data if entry.get("id") != session_id]
-        day_data.append(
-            {
-                "id": session_id,
-                "title": meta.get("title"),
-                "custom": meta.get("custom"),
-                "path": str(log_path),
-                "records": records,
-                "meta": meta,
-            }
-        )
-        day_log.write_text(json.dumps(day_data, ensure_ascii=False, indent=2), encoding="utf-8")
-        return day_log
+        return noxl_append_session_to_day_log(log_path, meta=meta)
 
     def adopt_session_log(self, log_path: Path) -> None:
         if not self.logger:

@@ -6,7 +6,7 @@
   - `central/cli.py`: interactive CLI (streams, helpers, sessions).
   - `central/commands/`: small CLI helpers (completion, sessions, helper flow).
 - `interfaces/`: Integrations and adapters (e.g., `.env` loader, session logger, PII sanitizer).
-- `memory/`: System prompt and session storage (`session-*.json` per run, `day.json` aggregates).
+- `memory/`: System prompt and session storage (`session-*.jsonl` per run, `day.json` aggregates).
 - `tests/`: Pytest suite (e.g., `tests/test_core_title.py`, `tests/test_session_logger.py`).
 - `main.py`: Local entry point.
 - `requirements.txt`: Dev/test tools (runtime is stdlib-only).

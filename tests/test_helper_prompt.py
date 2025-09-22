@@ -1,27 +1,29 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import pytest
 
 from central.core import ChatClient
+from central.transport import LLMTransport
+
+
+class _StubTransport(LLMTransport):
+    def __init__(self) -> None:
+        super().__init__("http://example.com")
+        self.messages: list[dict[str, object]] | None = None
+
+    def send(self, payload, *, stream=False, on_chunk=None):  # type: ignore[override]
+        self.messages = payload["messages"]
+        return "ok", {}
 
 
 @pytest.mark.usefixtures("tmp_path")
-def test_helper_result_injects_system_prompt(monkeypatch):
-    captured: dict[str, object] = {}
+def test_helper_result_injects_system_prompt():
+    stub = _StubTransport()
 
-    def fake_request(self, req):
-        payload = json.loads(req.data.decode("utf-8"))
-        captured["messages"] = payload["messages"]
-        return "ok", {}
-
-    monkeypatch.setattr(ChatClient, "_request_non_streaming", fake_request)
-
-    client = ChatClient(stream=False, enable_logging=False)
+    client = ChatClient(stream=False, enable_logging=False, transport=stub)
     client.process_helper_result("helper text")
 
-    msgs = captured["messages"]
+    msgs = stub.messages
+    assert msgs is not None
     assert msgs[-2]["role"] == "system"
     assert "Do you want the explanation" in msgs[-2]["content"]
