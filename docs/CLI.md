@@ -67,7 +67,7 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 ## Sessions
 
 - Files live under `memory/sessions/YYYY-MM-DD/`:
-- `session-*.json`: array of turn records
+- `session-*.jsonl`: JSON Lines turn records (legacy `.json` files still supported)
   - `session-*.meta.json`: metadata sidecar (id, path, title, turns, created/updated)
 - Auto-title on exit if no custom title.
 - List using `--sessions-ls` or `/sessions`.

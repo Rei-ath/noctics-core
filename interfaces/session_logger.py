@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+USER_SESSIONS_DIR = "sessions"
+USER_META_FILENAME = "user.json"
+
 
 def format_session_display_name(session_id: str) -> str:
     """Return a human-friendly label for a session file stem.
@@ -50,6 +53,9 @@ class SessionLogger:
     model: str
     sanitized: bool
     dirpath: Path = Path("memory/sessions")
+    users_root: Path = Path("memory/users")
+    user_id: Optional[str] = None
+    user_display: Optional[str] = None
     _file: Optional[Path] = None
     _meta_file: Optional[Path] = None
     _turn: int = 0
@@ -60,26 +66,22 @@ class SessionLogger:
 
     def start(self) -> None:
         # Create a date-based subfolder (UTC) for sessions, e.g.,
-        # memory/sessions/2025-09-13/session-20250913-123456.json
-        base = self.dirpath
+        # memory/sessions/2025-09-13/session-20250913-123456.jsonl
+        base = self._resolve_session_root()
         now_utc = datetime.now(timezone.utc)
         date_folder = now_utc.date().isoformat()  # YYYY-MM-DD
         dated_dir = base / date_folder
         dated_dir.mkdir(parents=True, exist_ok=True)
 
         ts = now_utc.strftime("%Y%m%d-%H%M%S")
-        self._file = dated_dir / f"session-{ts}.json"
+        self._file = dated_dir / f"session-{ts}.jsonl"
         self._display_name = format_session_display_name(self._file.stem)
         self._records = []
-        if self._file.exists():
-            try:
-                data = json.loads(self._file.read_text(encoding="utf-8"))
-                if isinstance(data, list):
-                    self._records = data
-            except Exception:
-                self._records = []
+        self._turn = 0
+        if not self._file.exists():
+            self._file.touch()
         else:
-            self._file.write_text("[]", encoding="utf-8")
+            self._turn = sum(1 for _ in self._iter_jsonl(self._file))
 
         # Create/initialize sidecar meta file
         self._meta_file = self._file.with_name(self._file.stem + ".meta.json")
@@ -100,24 +102,33 @@ class SessionLogger:
                 "display_name": self._display_name,
             },
         }
-        self._records.append(rec)
         if self._file is not None:
-            self._file.write_text(
-                json.dumps(self._records, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            if self._file.suffix == ".jsonl":
+                line = json.dumps(rec, ensure_ascii=False)
+                with self._file.open("a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+            else:
+                self._records.append(rec)
+                self._file.write_text(
+                    json.dumps(self._records, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
         self._write_meta()
 
     def load_existing(self, log_path: Path) -> None:
         self._file = log_path
         self._meta_file = log_path.with_name(log_path.stem + ".meta.json")
-        self.dirpath = log_path.parent.parent
-        try:
-            data = json.loads(log_path.read_text(encoding="utf-8"))
-        except Exception:
-            data = []
-        self._records = data if isinstance(data, list) else []
-        self._turn = len(self._records)
+        self._infer_user_from_path(log_path)
+        if log_path.suffix == ".jsonl":
+            self._records = []
+            self._turn = sum(1 for _ in self._iter_jsonl(log_path))
+        else:
+            try:
+                data = json.loads(log_path.read_text(encoding="utf-8"))
+            except Exception:
+                data = []
+            self._records = data if isinstance(data, list) else []
+            self._turn = len(self._records)
         if self._meta_file.exists():
             try:
                 meta = json.loads(self._meta_file.read_text(encoding="utf-8"))
@@ -168,6 +179,9 @@ class SessionLogger:
             "file_name": self._file.name if self._file else None,
             "display_name": self._display_name or format_session_display_name(self._file.stem),
         }
+        if self.user_id:
+            meta["user_id"] = self.user_id
+            meta["user_display"] = self.user_display or self.user_id
         self._meta_file.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def set_title(self, title: str, *, custom: bool = True) -> None:
@@ -195,6 +209,8 @@ class SessionLogger:
             "custom": bool(self._title_custom),
             "file_name": self._file.name if self._file else None,
             "display_name": self._display_name if self._display_name else (format_session_display_name(self._file.stem) if self._file else None),
+            "user_id": self.user_id,
+            "user_display": self.user_display,
         }
 
     def meta_path(self) -> Optional[Path]:
@@ -202,3 +218,85 @@ class SessionLogger:
 
     def log_path(self) -> Optional[Path]:
         return self._file
+
+    # -----------------
+    # User-aware helpers
+    # -----------------
+
+    def _resolve_session_root(self) -> Path:
+        if self.user_id:
+            user_root = self.users_root / self.user_id
+            sessions_dir = user_root / USER_SESSIONS_DIR
+            sessions_dir.mkdir(parents=True, exist_ok=True)
+            if not self.user_display and self.user_id:
+                self.user_display = self.user_id.replace("_", " ")
+            self._ensure_user_meta(user_root)
+            self.dirpath = sessions_dir
+            return sessions_dir
+
+        self.dirpath.mkdir(parents=True, exist_ok=True)
+        return self.dirpath
+
+    def _ensure_user_meta(self, user_root: Path) -> None:
+        meta_path = user_root / USER_META_FILENAME
+        data: Dict[str, Any]
+        if meta_path.exists():
+            try:
+                data = json.loads(meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+        updated = False
+        if data.get("id") != self.user_id:
+            data["id"] = self.user_id
+            updated = True
+        display = self.user_display or data.get("display_name") or (self.user_id.replace("_", " ") if self.user_id else None)
+        if display and data.get("display_name") != display:
+            data["display_name"] = display
+            updated = True
+
+        if updated or not meta_path.exists():
+            meta_path.parent.mkdir(parents=True, exist_ok=True)
+            meta_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        self.user_display = data.get("display_name") or self.user_display or (self.user_id.replace("_", " ") if self.user_id else None)
+
+    def _iter_jsonl(self, path: Path):
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except Exception:
+                        continue
+        except FileNotFoundError:
+            return
+
+    def _infer_user_from_path(self, log_path: Path) -> None:
+        resolved = log_path.resolve()
+        # sessions/<day>/file.json -> sessions root is parent of day directory
+        sessions_root = resolved.parent.parent
+        user_root = sessions_root.parent
+
+        if user_root.name != "" and user_root.parent and user_root.parent.name == "users":
+            self.users_root = user_root.parent
+            self.user_id = user_root.name
+            self.dirpath = sessions_root
+            meta_path = user_root / USER_META_FILENAME
+            if meta_path.exists():
+                try:
+                    data = json.loads(meta_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
+                self.user_display = data.get("display_name") or data.get("id")
+            else:
+                self.user_display = self.user_id.replace("_", " ")
+            return
+
+        # Legacy structure
+        self.dirpath = sessions_root

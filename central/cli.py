@@ -25,6 +25,7 @@ from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
 from .colors import color
 from .core import ChatClient
+from interfaces.dev_identity import resolve_developer_identity
 from noxl import compute_title_from_messages, load_session_messages
 from .commands.completion import setup_completions
 from .commands.helper import (
@@ -257,25 +258,10 @@ def main(argv: List[str]) -> int:
 
     args = parse_args(argv)
 
-    # Build a consistent developer identity context line
-    def build_identity_context(name: str, project: str) -> str:
-        return (
-            f"Context: The user '{name}' is the developer of {project}. "
-            f"Address them as {name}. Allowed disclosure: if asked who your developer is "
-            f"(or whether you know your developer), answer directly that it is {name}. "
-            f"In normal replies, prefer their name over 'the user'; continue to anonymize when preparing "
-            f"[HELPER QUERY] blocks."
-        )
-
-    # If a developer name is provided, prefer it as the user label
-    dev_name = os.getenv("CENTRAL_DEV_NAME") or os.getenv("NOCTICS_DEV_NAME")
-    # If not explicitly set, recognize the local developer alias 'Rei'
-    if not dev_name:
-        user_env_name = os.getenv("CENTRAL_USER_NAME") or args.user_name
-        if user_env_name and user_env_name.strip().lower() == "rei":
-            dev_name = user_env_name.strip()
-    if dev_name and (not args.user_name or args.user_name.strip().lower() in {"you", "user"}):
-        args.user_name = dev_name.strip()
+    identity = resolve_developer_identity()
+    dev_name = identity.display_name
+    if not args.user_name or args.user_name.strip().lower() in {"you", "user"}:
+        args.user_name = dev_name
 
     # Session management commands (non-interactive)
     if args.sessions_ls:
@@ -384,27 +370,31 @@ def main(argv: List[str]) -> int:
     else:
         sys_prompt_text = args.system
 
-    # Optionally inject identity context if a developer name is configured
-    identity_line: Optional[str] = None
-    if dev_name:
-        project = os.getenv("NOCTICS_PROJECT_NAME", "Noctics")
-        identity_line = build_identity_context(dev_name, project)
-        # Update the last system message if any; otherwise insert one
-        idx = None
-        for i in range(len(messages) - 1, -1, -1):
-            m = messages[i]
-            if isinstance(m, dict) and m.get("role") == "system":
-                idx = i
+    # Inject identity context if not already present
+    identity_line = identity.context_line()
+    already_tagged = False
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "system":
+            content = str(msg.get("content") or "")
+            if identity_line in content:
+                already_tagged = True
                 break
-        if idx is not None:
-            content = str(messages[idx].get("content") or "").strip()
-            content = (content + "\n\n" + identity_line).strip()
-            messages[idx]["content"] = content
-        else:
+    if not already_tagged:
+        inserted = False
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                content = str(msg.get("content") or "").strip()
+                content = (content + ("\n\n" if content else "") + identity_line).strip()
+                messages[i]["content"] = content
+                inserted = True
+                break
+        if not inserted:
             messages.insert(0, {"role": "system", "content": identity_line})
-        # Keep args.system in sync for resets
         if args.system:
-            args.system = (args.system + "\n\n" + identity_line).strip()
+            content = args.system.strip()
+            if identity_line not in content:
+                args.system = (content + ("\n\n" if content else "") + identity_line).strip()
         else:
             args.system = identity_line
 
@@ -433,6 +423,8 @@ def main(argv: List[str]) -> int:
         messages=messages,
         enable_logging=True,
         strip_reasoning=not bool(args.show_think),
+        memory_user=identity.user_id,
+        memory_user_display=identity.display_name,
     )
 
     # Early connectivity check unless in manual/helper mode

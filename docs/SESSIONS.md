@@ -4,7 +4,7 @@ Central logs every session to JSONL and writes a companion meta file that tracks
 
 ## Files
 
-- `memory/sessions/YYYY-MM-DD/session-*.json`: array of turn records (each record mirrors the JSONL format)
+- `memory/sessions/YYYY-MM-DD/session-*.jsonl`: JSON Lines turn records (legacy `.json` files remain compatible)
 - `memory/sessions/YYYY-MM-DD/session-*.meta.json`: session metadata (id, path, turns, created, updated, title, custom)
 - `memory/sessions/YYYY-MM-DD/day.json`: aggregate of every session saved that day (deduplicated on session close)
 
