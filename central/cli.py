@@ -32,6 +32,7 @@ from noxl import compute_title_from_messages, load_session_messages
 from .commands.completion import setup_completions
 from .commands.helper import (
     choose_helper_interactively,
+    get_helper_candidates,
     describe_helper_status,
     helper_automation_enabled,
 )
@@ -51,6 +52,7 @@ from .commands.sessions import (
 from .commands.help_cmd import print_help as cmd_print_help
 from interfaces.dotenv import load_local_dotenv
 from .system_info import hardware_summary
+from .version import __version__
 
 RuntimeIdentity = _RuntimeIdentity
 resolve_runtime_identity = _resolve_runtime_identity
@@ -306,8 +308,9 @@ def main(argv: List[str]) -> int:
                     )
                 )
 
+    helper_status_line = describe_helper_status()
     if interactive:
-        print(color(f"Helpers: {describe_helper_status()}", fg="yellow"))
+        print(color(f"Helpers: {helper_status_line}", fg="yellow"))
     hardware_line = f"Hardware context: {hardware_summary()}"
 
     if args.stream is None:
@@ -540,6 +543,30 @@ def main(argv: List[str]) -> int:
             args.system = hardware_line
     if interactive:
         print(color(hardware_line, fg="yellow"))
+
+    helper_roster = get_helper_candidates()
+
+    def print_status_block() -> None:
+        if not interactive:
+            return
+        automation = "ON" if helper_automation_enabled() else "OFF"
+        roster = ", ".join(helper_roster) if helper_roster else "(none)"
+        session_info = cmd_list_sessions()
+        session_count = len(session_info)
+        status_lines = [
+            color("╔══════════[ CENTRAL STATUS ]══════════╗", fg="cyan", bold=True),
+            color(f"║ Version        : {__version__:<22}║", fg="cyan"),
+            color(f"║ Developer      : {identity.display_name:<22}║", fg="cyan"),
+            color(f"║ Helper Auto    : {automation:<22}║", fg="cyan"),
+            color(f"║ Helper Roster  : {roster:<22}║", fg="cyan"),
+            color(f"║ Sessions Saved : {session_count:<22}║", fg="cyan"),
+            color("╚══════════════════════════════════════╝", fg="cyan", bold=True),
+        ]
+        for line in status_lines:
+            print(line)
+
+    if interactive:
+        print_status_block()
 
     if (sys_prompt_text or identity_line):
         # Recompute for display after any identity injection
@@ -802,8 +829,8 @@ def main(argv: List[str]) -> int:
         one_turn(initial_user)
 
     # Interactive loop
-    suppress_help = os.getenv("CENTRAL_SUPPRESS_HELP", "")
-    if suppress_help.lower() not in {"1", "true", "yes", "on"}:
+    show_help_env = os.getenv("CENTRAL_SHOW_HELP", "")
+    if show_help_env.lower() in {"1", "true", "yes", "on"}:
         cmd_print_help(client, user_name=args.user_name)
         if sys.stdin.isatty() and readline is not None:
             print(color("[Tab completion enabled: type '/' then press Tab]", fg="yellow"))

@@ -85,6 +85,7 @@ Import policy: prefer public functions across modules; avoid deep internals. Kee
 - Slash commands support session browsing, renaming, merging, archiving, helper selection, and contextual toggles like `/anon`.
 - Central can rename the conversation mid-stream by emitting `[SET TITLE]New Name[/SET TITLE]`, and on a brand-new install it asks the model for an initial session title automatically.
 - On exit the CLI auto-generates a session title when possible, deletes empty logs, and appends summaries to the day aggregate.
+- Startup prints a “Central Status” block (version, developer, helper roster, session count) in a retro console style.
 
 ## Helper Flow & Session Utilities
 - The CLI prompts for a helper label when Central emits a `[HELPER QUERY]`. If automation is disabled, Central explains that the request could not be sent; pair with the full Noctics router and set `CENTRAL_HELPER_AUTOMATION` (or the JSON config) to enable automatic dispatch.

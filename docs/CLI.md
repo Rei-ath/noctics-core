@@ -89,6 +89,7 @@ Environment variables take precedence over the JSON file.
 - On a brand-new install (no prior sessions), Central asks the model for a friendly session title and applies it automatically. During the conversation, Central can rename the session by emitting `[SET TITLE]New Name[/SET TITLE]`.
 - You can add clarifying notes before the message is sent, accept the suggested title, or type a custom one (or press Enter to skip).
 - After this first turn, the chat proceeds normally; you can still rename later with `/title` or `/rename`.
+- Environment toggles: set `CENTRAL_SHOW_SYSTEM_PROMPT=1` if you want the raw system prompt to print, and `CENTRAL_SHOW_HELP=1` if you prefer the startup help banner.
 
 ## Sessions
 
