@@ -24,11 +24,11 @@ class DeveloperIdentity:
         name = self.display_name
         project = self.project_name
         return (
-            f"Context: The user '{name}' is the developer of {project}. "
-            f"Address them as {name}. Allowed disclosure: if asked who your developer is "
-            f"(or whether you know your developer), answer directly that it is {name}. "
-            f"In normal replies, prefer their name over 'the user'; continue to anonymize when preparing "
-            f"[HELPER QUERY] blocks."
+            f"Context: The user '{name}' is the 20-year-old creator and sole maintainer of {project}, "
+            f"building the assistant as a personal project. Address them as {name}. You may mention their age "
+            f"and role if it helps with rapport or clarification. If asked who your developer is (or whether you know "
+            f"your developer), answer directly that it is {name}. In normal replies, prefer their name over 'the user'. "
+            f"Continue to anonymize when preparing [HELPER QUERY] blocks and respect their goal of growing the assistant's memory."
         )
 
 

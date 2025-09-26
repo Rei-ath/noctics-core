@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 from typing import Dict, Any, List, Optional, Tuple
 try:
@@ -619,6 +621,47 @@ def main(argv: List[str]) -> int:
             return None
         return helper_text
 
+    dev_shell_pattern = re.compile(r"\[DEV\s*SHELL\s*COMMAND\](.*?)\[/DEV\s*SHELL\s*COMMAND\]", re.IGNORECASE | re.DOTALL)
+
+    def handle_dev_shell_commands(assistant_text: Optional[str]) -> None:
+        if not assistant_text or not getattr(args, "dev", False):
+            return
+        matches = dev_shell_pattern.findall(assistant_text)
+        if not matches:
+            return
+        for raw in matches:
+            command = raw.strip()
+            if not command:
+                continue
+            print(color(f"[dev shell] Running: {command}", fg="yellow"))
+            try:
+                proc = subprocess.run(
+                    command,
+                    shell=True,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                output = (proc.stdout or "") + (proc.stderr or "")
+            except Exception as exc:  # pragma: no cover - defensive
+                output = f"Command failed: {exc}"
+            output = output.strip() or "(no output)"
+            print(color("[dev shell output]", fg="yellow", bold=True))
+            print(output)
+
+            result_text = (
+                "[DEV SHELL RESULT]\n"
+                f"{output}\n"
+                "[/DEV SHELL RESULT]"
+            )
+            client.messages.append({"role": "assistant", "content": result_text})
+            if client.logger:
+                sys_msgs = [m for m in client.messages if m.get("role") == "system"]
+                to_log = (sys_msgs[-1:] if sys_msgs else []) + [
+                    {"role": "assistant", "content": result_text},
+                ]
+                client.logger.log_turn(to_log)
+
     def notify_helper_needed() -> None:
         status_line = describe_helper_status()
         message = f"Central requested an external helper. {status_line}"
@@ -656,6 +699,7 @@ def main(argv: List[str]) -> int:
             print()
             if assistant is not None and ChatClient.wants_helper(assistant):
                 notify_helper_needed()
+            handle_dev_shell_commands(assistant)
             return assistant
         else:
             try:
@@ -674,6 +718,7 @@ def main(argv: List[str]) -> int:
                 print(assistant)
                 if ChatClient.wants_helper(assistant):
                     notify_helper_needed()
+                handle_dev_shell_commands(assistant)
             return assistant
 
     # Non-interactive one-shot if stdin is piped and no --user provided
@@ -745,6 +790,46 @@ def main(argv: List[str]) -> int:
                 else:
                     args.helper = parts[1].strip()
                     print(color(f"Helper set to '{args.helper}'.", fg="yellow"))
+                continue
+
+            if prompt.startswith("/shell"):
+                if not getattr(args, "dev", False):
+                    print(color("/shell is only available in developer mode.", fg="red"))
+                    continue
+                parts = prompt.split(maxsplit=1)
+                if len(parts) == 1 or not parts[1].strip():
+                    print(color("Usage: /shell COMMAND", fg="yellow"))
+                    continue
+                command = parts[1].strip()
+                try:
+                    result = subprocess.run(
+                        command,
+                        shell=True,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    combined = (result.stdout or "") + (result.stderr or "")
+                    combined = combined.strip()
+                    if not combined:
+                        combined = "(no output)"
+                    print(color("[shell output]", fg="yellow", bold=True))
+                    print(combined)
+                except Exception as exc:  # pragma: no cover - defensive
+                    combined = f"Command failed: {exc}"
+                    print(color(combined, fg="red"))
+
+                user_text = (
+                    "[DEV SHELL COMMAND]\n"
+                    f"{command}\n"
+                    "[/DEV SHELL COMMAND]"
+                )
+                assistant_text = (
+                    "[DEV SHELL RESULT]\n"
+                    f"{combined}\n"
+                    "[/DEV SHELL RESULT]"
+                )
+                client.record_turn(user_text, assistant_text)
                 continue
 
             if prompt.startswith("/name "):

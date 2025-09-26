@@ -89,6 +89,7 @@ Import policy: prefer public functions across modules; avoid deep internals. Kee
 - The CLI prompts for a helper label when Central emits a `[HELPER QUERY]`. Automation is manual by default—users paste `[HELPER RESULT]` with `/result`. Install the full Noctics router and toggle `CENTRAL_HELPER_AUTOMATION` (or JSON config) to enable automatic dispatch.
 - `central/commands/sessions.py` wraps `noxl` helpers for listing, loading, merging, and showing stored conversations with paired turn output.
 - `noxl/__init__.py` exposes programmatic helpers (list, load, merge, archive) for scripts or the alternate `python -m noxl` CLI.
+- Default developer context: Rei, a 20-year-old solo developer building this assistant. The system prompt and identity resolver include that story unless overridden.
 
 ## Persistence & Identity
 - `interfaces/session_logger.py` writes per-turn JSONL records alongside `.meta.json` sidecars, recording model, sanitized state, titles, and user info.
