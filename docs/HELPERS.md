@@ -1,6 +1,6 @@
 # Helper Workflow
 
-Central v0 keeps helpers manual by design. It detects when the assistant wants outside help, sanitises the payload, and guides you through the copy/paste loop. Automatic routing is reserved for the upcoming Noctics router service, but you can already customise the roster and automation toggle via environment variables or `config/central.json`.
+Central v0 detects when the assistant wants outside help, sanitises the payload, and clearly states whether the request could be sent. Automatic routing is reserved for the upcoming Noctics router service, but you can already customise the roster and automation toggle via environment variables or `config/central.json`.
 
 ## Helper labels
 
@@ -10,11 +10,10 @@ Central v0 keeps helpers manual by design. It detects when the assistant wants o
 
 ## Sanitized helper queries
 
-PII redaction (`--sanitize`) still runs first. `CENTRAL_REDACT_NAMES` masks additional names, and the helper block is always wrapped in `[HELPER QUERY]…[/HELPER QUERY]` / `[HELPER RESULT]…[/HELPER RESULT]`. `--anon-helper` remains reserved for when router automation ships.
+PII redaction (`--sanitize`) still runs first. `CENTRAL_REDACT_NAMES` masks additional names, and helper requests are always wrapped in `[HELPER QUERY]…[/HELPER QUERY]`. `--anon-helper` remains reserved for when router automation ships.
 
 ## What happens today?
 
 1. Central emits a human-friendly explanation plus the `[HELPER QUERY]` block.
-2. If automation is disabled, the CLI tells you to consult the chosen helper and paste the result using `/result` (ending input with a single `.` line).
-3. `ChatClient.process_helper_result` consumes the pasted text and logs it as part of the conversation.
-4. If you deploy Central within the full Noctics suite, set `CENTRAL_HELPER_AUTOMATION=1` (or turn it on in `config/central.json`) so the router can perform the helper call automatically.
+2. If automation is disabled, Central notes that the request could not be sent and offers alternative local steps.
+3. When you deploy Central within the full Noctics suite, set `CENTRAL_HELPER_AUTOMATION=1` (or enable it in `config/central.json`) so the router performs the helper call automatically and returns `[HELPER RESULT]` for stitching.

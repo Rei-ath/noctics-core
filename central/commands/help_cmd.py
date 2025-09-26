@@ -14,7 +14,6 @@ def print_help(client: ChatClient, *, user_name: str = "You") -> None:
     print(color("  /help          show this help", fg="yellow"))
     print(color("  /helper NAME   set helper label (used when a helper is requested)", fg="yellow"))
     print(color("  /helper        clear helper label", fg="yellow"))
-    print(color("  /result        paste a helper reply for Central to stitch", fg="yellow"))
     print(color("  /shell CMD     run a local shell command (developer mode only)", fg="yellow"))
     print(color("  /iam NAME      mark yourself as the developer for this session", fg="yellow"))
     print(color("  /ls            list saved sessions with titles", fg="yellow"))

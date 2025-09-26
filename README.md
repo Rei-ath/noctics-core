@@ -67,12 +67,7 @@ See `docs/CLI.md` for all flags and interactive commands.
 
 ## Helper Flow
 
-Central first tries to answer locally. If it needs outside help, it:
-
-1. Confirms which helper you want (pick from the configured roster or type your own label).
-2. Emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]` block and tells you it is awaiting a helper result.
-3. If the standalone core can’t call helpers automatically, it reminds you to paste the `[HELPER RESULT]` with `/result` (and points you to the full Noctics suite + router for automation).
-4. When you paste the helper output, it wraps it and feeds it through `ChatClient.process_helper_result` so the conversation continues seamlessly.
+Central first tries to answer locally. If it needs outside help, it confirms which helper should be used, emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]`, and—when automation is unavailable—explains that the request could not be sent. Once Central is paired with the full Noctics router, the helper response will arrive automatically and be stitched into the conversation.
 
 Privacy: Helper requests are always sanitized (PII redaction + optional name masking). Automation is disabled by default; toggle it with `CENTRAL_HELPER_AUTOMATION` or the JSON config once you wire in the router.
 
