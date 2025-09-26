@@ -549,7 +549,8 @@ def main(argv: List[str]) -> int:
         else:
             sys_prompt_text = args.system
 
-    if sys_prompt_text:
+    show_sys_prompt = os.getenv("CENTRAL_SHOW_SYSTEM_PROMPT", "")
+    if sys_prompt_text and show_sys_prompt.lower() in {"1", "true", "yes", "on"}:
         print(color("System Prompt:", fg="magenta", bold=True))
         print(color(sys_prompt_text, fg="magenta"))
         print()
@@ -801,9 +802,11 @@ def main(argv: List[str]) -> int:
         one_turn(initial_user)
 
     # Interactive loop
-    cmd_print_help(client, user_name=args.user_name)
-    if sys.stdin.isatty() and readline is not None:
-        print(color("[Tab completion enabled: type '/' then press Tab]", fg="yellow"))
+    suppress_help = os.getenv("CENTRAL_SUPPRESS_HELP", "")
+    if suppress_help.lower() not in {"1", "true", "yes", "on"}:
+        cmd_print_help(client, user_name=args.user_name)
+        if sys.stdin.isatty() and readline is not None:
+            print(color("[Tab completion enabled: type '/' then press Tab]", fg="yellow"))
     try:
         while True:
             try:
