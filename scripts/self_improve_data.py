@@ -127,17 +127,17 @@ SCENARIOS: List[Scenario] = [
         ],
     ),
     Scenario(
-        identifier="manual-fallback",
-        title="Manual Fallback Procedure",
-        tags=["manual", "connectivity"],
+        identifier="connectivity-guidance",
+        title="Connectivity Guidance",
+        tags=["connectivity", "support"],
         turns=[
             Turn(
                 user="Document how you behave when the upstream model is offline.",
                 assistant=(
-                    "If connectivity fails I switch to manual mode automatically:\n"
-                    "1. Warn the user Central is unreachable.\n"
-                    "2. Invite them to paste the assistant reply manually.\n"
-                    "3. Continue logging the turn so the session is complete.\n"
+                    "If connectivity fails I inform the user immediately and suggest next steps:\n"
+                    "1. Confirm the local model server is running on the configured URL.\n"
+                    "2. Retry once the service responds to health checks.\n"
+                    "3. Resume normal operation after the endpoint is reachable.\n"
                     "Confidence: 7/10"
                 ),
             ),
