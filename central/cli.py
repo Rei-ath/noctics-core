@@ -15,7 +15,7 @@ import os
 import re
 import subprocess
 import sys
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 try:
     import readline  # type: ignore
 except Exception:  # pragma: no cover - platform without readline
@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - platform without readline
 from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
 from .colors import color
-from .core import ChatClient
+from .core import ChatClient, build_payload, strip_chain_of_thought
 from .runtime_identity import (
     RuntimeIdentity as _RuntimeIdentity,
     resolve_runtime_identity as _resolve_runtime_identity,
@@ -371,6 +371,58 @@ def main(argv: List[str]) -> int:
         cmd_browse_sessions()
         return 0
 
+    sessions_snapshot = cmd_list_sessions()
+    first_run_global = not sessions_snapshot
+
+    def request_initial_title_from_central(client: ChatClient) -> Optional[str]:
+        messages_for_title = list(client.messages)
+        prompt_text = (
+            "Before we begin, suggest a short friendly session title (max 6 words). "
+            "Respond with the title only."
+        )
+        messages_for_title.append({"role": "user", "content": prompt_text})
+        try:
+            reply, _ = client.transport.send(
+                build_payload(
+                    model=client.model,
+                    messages=messages_for_title,
+                    temperature=0.0,
+                    max_tokens=32 if client.max_tokens == -1 else min(client.max_tokens, 64),
+                    stream=False,
+                ),
+                stream=False,
+            )
+        except Exception:
+            return None
+        if not reply:
+            return None
+        reply = strip_chain_of_thought(reply)
+        title = reply.strip().strip('"')
+        return title[:80] if title else None
+
+    def select_session_interactively(items: List[Dict[str, Any]]) -> tuple[Optional[List[Dict[str, Any]]], Optional[Path]]:
+        if not items:
+            return None, None
+        print(color("Saved sessions:", fg="yellow", bold=True))
+        cmd_print_sessions(items)
+        while True:
+            try:
+                choice = input(color("Select session number or id (Enter for new): ", fg="yellow")).strip()
+            except EOFError:
+                return None, None
+            if not choice:
+                return None, None
+            path = cmd_resolve_by_ident_or_index(choice, items)
+            if not path:
+                print(color("No session found for that selection.", fg="red"))
+                continue
+            loaded = load_session_messages(path)
+            if not loaded:
+                print(color("Session is empty or unreadable.", fg="red"))
+                continue
+            print(color(f"Loaded session: {path.stem}", fg="yellow"))
+            return loaded, path
+
     # Load default system prompt from file if not provided
     if args.system is None and not args.messages_file:
         local_path = Path("memory/system_prompt.local.txt")
@@ -380,45 +432,47 @@ def main(argv: List[str]) -> int:
         elif default_path.exists():
             args.system = default_path.read_text(encoding="utf-8").strip()
 
-    # Initialize conversation messages
-    messages: List[Dict[str, Any]]
     session_path_to_adopt: Optional[Path] = None
+    messages: List[Dict[str, Any]] = []
     if args.messages_file:
         with open(args.messages_file, "r", encoding="utf-8") as f:
             messages = json.load(f)
             if not isinstance(messages, list):
                 raise SystemExit("--messages must point to a JSON array of messages")
     else:
-        messages = []
-        if args.system:
+        if args.sessions_load:
+            path: Optional[Path] = None
+            if str(args.sessions_load).isdigit():
+                items = sessions_snapshot
+                idx = int(args.sessions_load)
+                if 1 <= idx <= len(items):
+                    path = Path(items[idx - 1]["path"])  # type: ignore[index]
+            if path is None:
+                candidate = Path(args.sessions_load)
+                if candidate.exists():
+                    path = candidate
+            if path is None:
+                path = cmd_resolve_by_ident_or_index(str(args.sessions_load))
+            if not path:
+                raise SystemExit(f"--sessions-load: not found: {args.sessions_load}")
+            loaded = load_session_messages(path)
+            if loaded:
+                messages = loaded
+                sys_msgs = [m for m in messages if m.get("role") == "system"]
+                if sys_msgs:
+                    args.system = sys_msgs[0].get("content")
+            session_path_to_adopt = path
+            print(color(f"Loaded session: {path.stem}", fg="yellow"))
+        elif interactive and not args.messages_file:
+            loaded_messages, chosen_path = select_session_interactively(sessions_snapshot)
+            if loaded_messages is not None:
+                messages = loaded_messages
+                session_path_to_adopt = chosen_path
+                sys_msgs = [m for m in messages if m.get("role") == "system"]
+                if sys_msgs:
+                    args.system = sys_msgs[0].get("content")
+        if not messages and args.system:
             messages.append({"role": "system", "content": args.system})
-
-    # Optionally load a saved session as starting context
-    if args.sessions_load:
-        # Allow numeric index or explicit path
-        path: Optional[Path] = None
-        if str(args.sessions_load).isdigit():
-            items = cmd_list_sessions()
-            idx = int(args.sessions_load)
-            if 1 <= idx <= len(items):
-                path = Path(items[idx - 1]["path"])  # type: ignore[index]
-        if path is None:
-            candidate = Path(args.sessions_load)
-            if candidate.exists():
-                path = candidate
-        if path is None:
-            path = cmd_resolve_by_ident_or_index(str(args.sessions_load))
-        if not path:
-            raise SystemExit(f"--sessions-load: not found: {args.sessions_load}")
-        loaded = load_session_messages(path)
-        if loaded:
-            messages = loaded
-            # Reset system prompt text to what's in loaded messages (for display)
-            sys_msgs = [m for m in messages if m.get("role") == "system"]
-            if sys_msgs:
-                args.system = sys_msgs[0].get("content")
-        session_path_to_adopt = path
-        print(color(f"Loaded session: {path.stem}", fg="yellow"))
 
     # Determine and display system prompt at startup (colored)
     sys_prompt_text: Optional[str] = None
@@ -541,6 +595,12 @@ def main(argv: List[str]) -> int:
     if session_path_to_adopt is not None:
         adopt_session(session_path_to_adopt)
 
+    if first_run_global and session_path_to_adopt is None and not client.get_session_title():
+        auto_title = request_initial_title_from_central(client)
+        if auto_title:
+            client.set_session_title(auto_title, custom=True)
+            print(color(f"Session titled: {auto_title}", fg="yellow"))
+
     title_confirmed = bool(client.get_session_title())
     first_prompt_handled = any(m.get("role") == "user" for m in client.messages)
     if session_path_to_adopt is not None:
@@ -603,25 +663,8 @@ def main(argv: List[str]) -> int:
     # ----------
     setup_completions()
 
-    # Helper to perform a single turn given a user prompt
-    def prompt_for_helper_reply() -> Optional[str]:
-        print(color("Paste the helper's reply. Enter a single '.' line to finish.", fg="yellow"))
-        lines: List[str] = []
-        while True:
-            try:
-                line = input(color("helper>", fg="blue", bold=True) + " ")
-            except EOFError:
-                return None
-            if line.strip() == ".":
-                break
-            lines.append(line)
-        helper_text = "\n".join(lines).strip()
-        if not helper_text:
-            print(color("No helper result captured.", fg="yellow"))
-            return None
-        return helper_text
-
     dev_shell_pattern = re.compile(r"\[DEV\s*SHELL\s*COMMAND\](.*?)\[/DEV\s*SHELL\s*COMMAND\]", re.IGNORECASE | re.DOTALL)
+    set_title_pattern = re.compile(r"\[SET\s*TITLE\](.*?)\[/SET\s*TITLE\]", re.IGNORECASE | re.DOTALL)
 
     def handle_dev_shell_commands(assistant_text: Optional[str]) -> None:
         if not assistant_text or not getattr(args, "dev", False):
@@ -662,6 +705,24 @@ def main(argv: List[str]) -> int:
                 ]
                 client.logger.log_turn(to_log)
 
+    def handle_title_change(assistant_text: Optional[str]) -> Optional[str]:
+        nonlocal title_confirmed
+        if not assistant_text:
+            return assistant_text
+        matches = set_title_pattern.findall(assistant_text)
+        if not matches:
+            return assistant_text
+        for raw in matches:
+            new_title = raw.strip()
+            if new_title:
+                client.set_session_title(new_title, custom=True)
+                title_confirmed = True
+                print(color(f"Session title set: {new_title}", fg="yellow"))
+        cleaned = set_title_pattern.sub("", assistant_text).strip()
+        if client.messages and client.messages[-1].get("role") == "assistant":
+            client.messages[-1]["content"] = cleaned or assistant_text
+        return cleaned or assistant_text
+
     def notify_helper_needed() -> None:
         status_line = describe_helper_status()
         message = f"Central requested an external helper. {status_line}"
@@ -695,6 +756,7 @@ def main(argv: List[str]) -> int:
             if assistant is not None and ChatClient.wants_helper(assistant):
                 notify_helper_needed()
             handle_dev_shell_commands(assistant)
+            assistant = handle_title_change(assistant)
             return assistant
         else:
             try:
@@ -710,10 +772,12 @@ def main(argv: List[str]) -> int:
                 )
                 return None
             if assistant is not None:
-                print(assistant)
                 if ChatClient.wants_helper(assistant):
                     notify_helper_needed()
                 handle_dev_shell_commands(assistant)
+                assistant = handle_title_change(assistant)
+                if assistant:
+                    print(assistant)
             return assistant
 
     # Non-interactive one-shot if stdin is piped and no --user provided

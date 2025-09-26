@@ -80,13 +80,14 @@ Import policy: prefer public functions across modules; avoid deep internals. Kee
 - Session management helpers cover auto-titling, empty-session cleanup, and day-log aggregation via `noxl` utilities.
 
 ## CLI Workflow (`central/cli.py`)
-- The CLI bootstraps environment variables, prompts the user to choose or create a profile (unless `--dev` is supplied), asks whether to enable streaming, and then instantiates `ChatClient`.
+- The CLI bootstraps environment variables, prompts the user to choose or create a profile (unless `--dev` is supplied), lists existing sessions via `noxl` so you can load one immediately, asks whether to enable streaming, and then instantiates `ChatClient`.
 - It can preload saved sessions, inject identity context into the system prompt, and run in one-shot or interactive REPL modes.
 - Slash commands support session browsing, renaming, merging, archiving, helper selection, and contextual toggles like `/anon`.
+- Central can rename the conversation mid-stream by emitting `[SET TITLE]New Name[/SET TITLE]`, and on a brand-new install it asks the model for an initial session title automatically.
 - On exit the CLI auto-generates a session title when possible, deletes empty logs, and appends summaries to the day aggregate.
 
 ## Helper Flow & Session Utilities
-- The CLI prompts for a helper label when Central emits a `[HELPER QUERY]`. Automation is manual by default—users paste `[HELPER RESULT]` with `/result`. Install the full Noctics router and toggle `CENTRAL_HELPER_AUTOMATION` (or JSON config) to enable automatic dispatch.
+- The CLI prompts for a helper label when Central emits a `[HELPER QUERY]`. If automation is disabled, Central explains that the request could not be sent; pair with the full Noctics router and set `CENTRAL_HELPER_AUTOMATION` (or the JSON config) to enable automatic dispatch.
 - `central/commands/sessions.py` wraps `noxl` helpers for listing, loading, merging, and showing stored conversations with paired turn output.
 - `noxl/__init__.py` exposes programmatic helpers (list, load, merge, archive) for scripts or the alternate `python -m noxl` CLI.
 - Default developer context: Rei, a 20-year-old solo developer building this assistant. The system prompt and identity resolver include that story unless overridden.
