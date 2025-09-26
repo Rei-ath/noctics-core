@@ -104,7 +104,7 @@ def describe_helper_status() -> str:
     if helper_automation_enabled():
         return f"Automation enabled. Available helpers: {roster}."
     return (
-        "Automation disabled (manual only). Available helper labels: "
+        "Automation disabled. Available helper labels: "
         f"{roster}. Install the full Noctics suite (with the router service) to enable automatic helper routing."
     )
 

@@ -672,12 +672,7 @@ def main(argv: List[str]) -> int:
                 chosen = choose_helper_interactively(args.helper)
                 if chosen:
                     args.helper = chosen
-                    message += f" Helper selected: {args.helper}."
-            message += " Paste the helper's reply with /result when ready."
-            if args.helper:
-                message += f" Current helper label: {args.helper}."
-            else:
-                message += " Use /helper to note which provider you plan to consult."
+            message += " Helper automation is unavailable in this build, so the request could not be sent."
         print(color(message, fg="yellow"))
 
     def one_turn(user_text: str) -> Optional[str]:
@@ -952,20 +947,6 @@ def main(argv: List[str]) -> int:
                     continue
                 if not cmd_rename_session(ident, new_title.strip()):
                     continue
-                continue
-
-            if prompt in {"/result", "/helper-result", "/paste-helper", "/hr"}:
-                helper_text = prompt_for_helper_reply()
-                if not helper_text:
-                    continue
-                if args.stream:
-                    final = client.process_helper_result(helper_text, on_delta=_printer())
-                    if final is not None:
-                        print()
-                else:
-                    final = client.process_helper_result(helper_text)
-                    if final is not None:
-                        print(final)
                 continue
 
             helper_suffix = f" [{args.helper}]" if args.helper else ""

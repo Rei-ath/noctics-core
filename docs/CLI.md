@@ -45,7 +45,6 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `/merge A B ...`: Merge sessions by ids or indices
 - `/name NAME`: Set your input prompt label for this session
 - `/anon` (or `/anon-helper`): Reserved helper-query anonymization toggle (no effect until helper automation ships)
-- `/result`: Paste a helper reply so Central can stitch it into the conversation
 - `/shell CMD`: Run a local shell command (developer mode only); output is logged into the session
 - `/reset`: Reset context to just the system message
 - `exit` / `quit`: Exit the session
@@ -57,7 +56,7 @@ Central tries to answer locally first. If it needs an external helper it:
 1. Confirms which helper label to use (from env/config/defaults).
 2. Emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]` and tells you it is waiting for an external reply.
 3. If automation is disabled (default for the standalone core), it reminds you to paste the helper output with `/result` and notes that the full Noctics suite + router enables automatic routing.
-4. When you paste the helper response, `ChatClient.process_helper_result` stitches it in and the conversation continues.
+4. The current standalone build does not forward helper requests; Central will acknowledge the limitation. When automation is available (router service), `ChatClient.process_helper_result` stitches the returned `[HELPER RESULT]` into the conversation automatically.
 
 Sanitisation honours `CENTRAL_HELPER_ANON` and name redaction env vars. You can preconfigure helper rosters and automation flags via `central/config.py` (JSON) or environment variables.
 
