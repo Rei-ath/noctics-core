@@ -55,8 +55,8 @@ Central tries to answer locally first. If it needs an external helper it:
 
 1. Confirms which helper label to use (from env/config/defaults).
 2. Emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]` and tells you it is waiting for an external reply.
-3. If automation is disabled (default for the standalone core), it reminds you to paste the helper output with `/result` and notes that the full Noctics suite + router enables automatic routing.
-4. The current standalone build does not forward helper requests; Central will acknowledge the limitation. When automation is available (router service), `ChatClient.process_helper_result` stitches the returned `[HELPER RESULT]` into the conversation automatically.
+3. If automation is disabled (default for the standalone core), it explains that the request could not be sent and suggests local follow-up steps.
+4. When automation is available (router service), `ChatClient.process_helper_result` stitches the returned `[HELPER RESULT]` into the conversation automatically.
 
 Sanitisation honours `CENTRAL_HELPER_ANON` and name redaction env vars. You can preconfigure helper rosters and automation flags via `central/config.py` (JSON) or environment variables.
 
@@ -84,9 +84,9 @@ Environment variables take precedence over the JSON file.
 
 ## First Prompt Experience
 
-- At startup (unless `--dev` is supplied) the CLI lists any known users, lets you pick one or create a new profile, and asks whether you want streaming enabled. It also logs a `Hardware context: …` line to the system prompt so the assistant knows where it is running.
-- The default developer identity is Rei, a 20-year-old solo creator of Central; the system prompt carries that context so replies stay personable. You can override with `--dev` or environment variables (`CENTRAL_DEV_NAME`, etc.). Developer mode also unlocks `/shell` for local command inspection.
-- On the first user message of a new session, the CLI still proposes a short session title derived from your request.
+- At startup (unless `--dev` is supplied) the CLI lists any known users, shows existing sessions (via `noxl`) so you can load one, and asks whether you want streaming enabled. It also logs a `Hardware context: …` line to the system prompt so the assistant knows where it is running.
+- The default developer identity is Rei, a 20-year-old solo creator of Central; the system prompt carries that context so replies stay personable. You can override with `--dev` or environment variables (`CENTRAL_DEV_NAME`, etc.). Developer mode also unlocks `/shell` for local command inspection and allows Central to issue `[DEV SHELL COMMAND]…` blocks automatically.
+- On a brand-new install (no prior sessions), Central asks the model for a friendly session title and applies it automatically. During the conversation, Central can rename the session by emitting `[SET TITLE]New Name[/SET TITLE]`.
 - You can add clarifying notes before the message is sent, accept the suggested title, or type a custom one (or press Enter to skip).
 - After this first turn, the chat proceeds normally; you can still rename later with `/title` or `/rename`.
 

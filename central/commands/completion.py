@@ -29,7 +29,6 @@ def setup_completions() -> None:
         "/reset",
         "/ls",
         "/last",
-        "/result",
         "/iam",
         "/helper",
         "/anon",
