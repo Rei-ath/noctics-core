@@ -31,7 +31,7 @@ TOPICS: Sequence[str] = (
     "helper workflow & confidence thresholds",
     "privacy and redaction safeguards",
     "memory capture / recall discipline",
-    "manual fallback and offline handling",
+    "connectivity guidance and service recovery",
     "session browsing and developer UX",
     "tone, clarity, and actionable guidance",
     "evaluating dataset quality and coverage",
@@ -88,21 +88,14 @@ def _copy_session(log_path: Path, tag: str) -> None:
 
 def _offline_response(topic: str, previous_summary: str | None, turn_index: int) -> str:
     intro = (
-        f"(Offline synthesis) Continuing the self-loop reflection on {topic}. "
-        "This turn acknowledges the model endpoint is unavailable, so Central is drafting the reflection manually."
+        f"Connectivity to the model endpoint is unavailable while reflecting on {topic}."
+        " I notify the user, recommend restarting or verifying the local server, and wait for a successful retry."
     )
-    continuity = (
-        f"Previous insight: {previous_summary}" if previous_summary else "Starting the reflection for this loop."
-    )
-    bullets = [
-        "- Key observation about behaviour and why it matters.",
-        "- Concrete action to improve this area in upcoming sessions.",
-        "- Metric or signal to evaluate whether the change is working.",
-    ]
-    closing = (
-        "Confidence: 7/10" if turn_index % 2 == 0 else "Confidence: 8/10"
-    )
-    return "\n".join([intro, continuity, *bullets, closing])
+    guidance = "Action: ensure the configured URL is reachable, then rerun the request."
+    confidence = "Confidence: 6/10"
+    if previous_summary:
+        return "\n".join([intro, f"Previous insight: {previous_summary}", guidance, confidence])
+    return "\n".join([intro, guidance, confidence])
 
 
 def run_self_loop(

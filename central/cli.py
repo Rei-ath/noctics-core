@@ -3,8 +3,6 @@ Interactive CLI to talk to a local OpenAI-like chat completions endpoint.
 
 Defaults mirror the provided curl and post to http://localhost:1234/v1/chat/completions.
 Supports both non-streaming and streaming (SSE) responses via --stream.
-Optionally supports a manual "helper" workflow where, instead of calling
-an API, you select a helper and paste the helper's response.
 
 No external dependencies (stdlib only).
 """
@@ -16,7 +14,6 @@ import json
 import os
 import sys
 from typing import Dict, Any, List, Optional, Tuple
-import shlex
 try:
     import readline  # type: ignore
 except Exception:  # pragma: no cover - platform without readline
@@ -25,15 +22,16 @@ from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
 from .colors import color
 from .core import ChatClient
-from interfaces.dev_identity import resolve_developer_identity
+from .runtime_identity import (
+    RuntimeIdentity as _RuntimeIdentity,
+    resolve_runtime_identity as _resolve_runtime_identity,
+)
 from noxl import compute_title_from_messages, load_session_messages
 from .commands.completion import setup_completions
 from .commands.helper import (
-    manual_helper_stream,
-    process_helper_result,
-    manual_central_stream,
-    extract_helper_query,
-    print_sanitized_helper_query,
+    choose_helper_interactively,
+    describe_helper_status,
+    helper_automation_enabled,
 )
 from .commands.sessions import (
     list_sessions as cmd_list_sessions,
@@ -50,9 +48,16 @@ from .commands.sessions import (
 )
 from .commands.help_cmd import print_help as cmd_print_help
 from interfaces.dotenv import load_local_dotenv
+from .system_info import hardware_summary
+
+RuntimeIdentity = _RuntimeIdentity
+resolve_runtime_identity = _resolve_runtime_identity
+
+__all__ = ["main", "parse_args", "RuntimeIdentity", "resolve_runtime_identity"]
 
 
 DEFAULT_URL = "http://localhost:1234/v1/chat/completions"
+
 
 
 def build_payload(
@@ -99,7 +104,6 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         epilog=(
             "Examples:\n"
             "  python main.py --stream\n"
-            "  python main.py --manual\n"
             "  python main.py --helper claude --stream\n"
             "  python main.py --user 'Explain X' --stream\n"
             "  python main.py --messages msgs.json --stream\n"
@@ -138,7 +142,20 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default=-1,
         help="Max tokens (-1 for unlimited if supported)",
     )
-    parser.add_argument("-s", "--stream", action="store_true", help="Enable streaming (SSE)")
+    parser.add_argument(
+        "-s",
+        "--stream",
+        dest="stream",
+        action="store_true",
+        default=None,
+        help="Enable streaming (SSE)",
+    )
+    parser.add_argument(
+        "--no-stream",
+        dest="stream",
+        action="store_false",
+        help="Disable streaming (skips the interactive prompt)",
+    )
     parser.add_argument(
         "-z", "--sanitize",
         action="store_true",
@@ -161,14 +178,6 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help=(
             "Optional helper name label used when Central requests a helper; "
             "does not skip API calls."
-        ),
-    )
-    parser.add_argument(
-        "-m", "--manual",
-        action="store_true",
-        help=(
-            "Manual response mode. Skip API calls and prompt to paste the "
-            "assistant/helper response each turn."
         ),
     )
     parser.add_argument(
@@ -229,10 +238,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help="Name to display for your prompt label (env CENTRAL_USER_NAME)",
     )
     parser.add_argument(
-        "--bypass-helper",
-        dest="bypass_helper",
+        "--dev",
         action="store_true",
-        help="Bypass Central->Helper stitching; you act as Central and paste the final reply",
+        help="Run as the project developer (skip user onboarding and log as developer)",
     )
     # Helper anonymization toggle (default on unless CENTRAL_HELPER_ANON=0/false)
     default_anon = (os.getenv("CENTRAL_HELPER_ANON", "1").lower() not in {"0", "false", "off", "no"})
@@ -241,13 +249,18 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         dest="anon_helper",
         action="store_true",
         default=default_anon,
-        help="Also show a sanitized [HELPER QUERY] block for copy/paste",
+        help="Reserved sanitization toggle for future helper integration",
     )
     parser.add_argument(
         "--no-anon-helper",
         dest="anon_helper",
         action="store_false",
-        help="Disable sanitized helper-query output",
+        help="Disable the reserved helper sanitization toggle",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Print the Central version and exit",
     )
     return parser.parse_args(argv)
 
@@ -258,10 +271,55 @@ def main(argv: List[str]) -> int:
 
     args = parse_args(argv)
 
-    identity = resolve_developer_identity()
-    dev_name = identity.display_name
-    if not args.user_name or args.user_name.strip().lower() in {"you", "user"}:
-        args.user_name = dev_name
+    if getattr(args, "version", False):
+        from .version import __version__
+
+        print(__version__)
+        return 0
+
+    interactive = sys.stdin.isatty()
+    original_label = (args.user_name or "").strip()
+    identity = resolve_runtime_identity(
+        dev_mode=bool(getattr(args, "dev", False)),
+        initial_label=original_label,
+        interactive=interactive,
+    )
+    args.user_name = identity.display_name
+    if interactive:
+        if getattr(args, "dev", False):
+            print(color("Running in developer mode as Rei.", fg="yellow"))
+        else:
+            if identity.created_user:
+                print(
+                    color(
+                        f"Registered user '{identity.display_name}' (id: {identity.user_id}).",
+                        fg="yellow",
+                    )
+                )
+            else:
+                print(
+                    color(
+                        f"Signed in as '{identity.display_name}' (id: {identity.user_id}).",
+                        fg="yellow",
+                    )
+                )
+
+    if interactive:
+        print(color(f"Helpers: {describe_helper_status()}", fg="yellow"))
+    hardware_line = f"Hardware context: {hardware_summary()}"
+
+    if args.stream is None:
+        if interactive:
+            prompt = color("Enable streaming? [y/N]: ", fg="yellow")
+            try:
+                choice = input(prompt).strip().lower()
+            except EOFError:
+                choice = ""
+            args.stream = choice in {"y", "yes"}
+        else:
+            args.stream = False
+    else:
+        args.stream = bool(args.stream)
 
     # Session management commands (non-interactive)
     if args.sessions_ls:
@@ -372,31 +430,60 @@ def main(argv: List[str]) -> int:
 
     # Inject identity context if not already present
     identity_line = identity.context_line()
-    already_tagged = False
+    if identity_line:
+        already_tagged = False
+        for msg in messages:
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                content = str(msg.get("content") or "")
+                if identity_line in content:
+                    already_tagged = True
+                    break
+        if not already_tagged:
+            inserted = False
+            for i in range(len(messages) - 1, -1, -1):
+                msg = messages[i]
+                if isinstance(msg, dict) and msg.get("role") == "system":
+                    content = str(msg.get("content") or "").strip()
+                    content = (content + ("\n\n" if content else "") + identity_line).strip()
+                    messages[i]["content"] = content
+                    inserted = True
+                    break
+            if not inserted:
+                messages.insert(0, {"role": "system", "content": identity_line})
+            if args.system:
+                content = args.system.strip()
+                if identity_line not in content:
+                    args.system = (content + ("\n\n" if content else "") + identity_line).strip()
+            else:
+                args.system = identity_line
+
+    hardware_inserted = False
     for msg in messages:
         if isinstance(msg, dict) and msg.get("role") == "system":
             content = str(msg.get("content") or "")
-            if identity_line in content:
-                already_tagged = True
+            if hardware_line in content:
+                hardware_inserted = True
                 break
-    if not already_tagged:
+    if not hardware_inserted:
         inserted = False
         for i in range(len(messages) - 1, -1, -1):
             msg = messages[i]
             if isinstance(msg, dict) and msg.get("role") == "system":
                 content = str(msg.get("content") or "").strip()
-                content = (content + ("\n\n" if content else "") + identity_line).strip()
+                content = (content + ("\n\n" if content else "") + hardware_line).strip()
                 messages[i]["content"] = content
                 inserted = True
                 break
         if not inserted:
-            messages.insert(0, {"role": "system", "content": identity_line})
+            messages.insert(0, {"role": "system", "content": hardware_line})
         if args.system:
             content = args.system.strip()
-            if identity_line not in content:
-                args.system = (content + ("\n\n" if content else "") + identity_line).strip()
+            if hardware_line not in content:
+                args.system = (content + ("\n\n" if content else "") + hardware_line).strip()
         else:
-            args.system = identity_line
+            args.system = hardware_line
+    if interactive:
+        print(color(hardware_line, fg="yellow"))
 
     if (sys_prompt_text or identity_line):
         # Recompute for display after any identity injection
@@ -427,30 +514,20 @@ def main(argv: List[str]) -> int:
         memory_user_display=identity.display_name,
     )
 
-    # Early connectivity check unless in manual/helper mode
-    if not (args.manual or args.helper):
+    # Early connectivity check unless in helper-only mode
+    if not args.helper:
         try:
             client.check_connectivity()
         except Exception as e:  # network-specific; present friendly guidance
             print(color("Warning: cannot reach Noctics Central.", fg="red", bold=True))
             print(color(f"{e}", fg="red"))
-            if not sys.stdin.isatty():
-                print(
-                    color(
-                        "Tip: start your local OpenAI-compatible server on the configured URL "
-                        "or re-run with --manual to paste responses.",
-                        fg="yellow",
-                    )
-                )
-                return 2
             print(
                 color(
-                    "Falling back to manual mode. Paste assistant responses when prompted.",
+                    "Start your local OpenAI-compatible server on the configured URL and try again.",
                     fg="yellow",
                 )
             )
-            args.manual = True
-            args.stream = False
+            return 2
 
     def adopt_session(path: Path) -> None:
         nonlocal title_confirmed, first_prompt_handled
@@ -524,37 +601,43 @@ def main(argv: List[str]) -> int:
     # ----------
     setup_completions()
 
-    # Note: manual_helper_stream and process_helper_result helpers are imported from central.commands.helper
-
     # Helper to perform a single turn given a user prompt
+    def prompt_for_helper_reply() -> Optional[str]:
+        print(color("Paste the helper's reply. Enter a single '.' line to finish.", fg="yellow"))
+        lines: List[str] = []
+        while True:
+            try:
+                line = input(color("helper>", fg="blue", bold=True) + " ")
+            except EOFError:
+                return None
+            if line.strip() == ".":
+                break
+            lines.append(line)
+        helper_text = "\n".join(lines).strip()
+        if not helper_text:
+            print(color("No helper result captured.", fg="yellow"))
+            return None
+        return helper_text
+
+    def notify_helper_needed() -> None:
+        status_line = describe_helper_status()
+        message = f"Central requested an external helper. {status_line}"
+        if helper_automation_enabled():
+            message += " Central will attempt to call the configured helper automatically when available."
+        else:
+            if not args.helper and sys.stdin.isatty():
+                chosen = choose_helper_interactively(args.helper)
+                if chosen:
+                    args.helper = chosen
+                    message += f" Helper selected: {args.helper}."
+            message += " Paste the helper's reply with /result when ready."
+            if args.helper:
+                message += f" Current helper label: {args.helper}."
+            else:
+                message += " Use /helper to note which provider you plan to consult."
+        print(color(message, fg="yellow"))
+
     def one_turn(user_text: str) -> Optional[str]:
-        # Determine if we're in manual paste mode (helper label alone no longer implies manual)
-        manual_mode = bool(args.manual)
-
-        if manual_mode:
-            helper_label = f" [{args.helper}]" if args.helper else ""
-            print()
-            print(
-                color(
-                    f"Manual mode{helper_label}: paste external response, then type END on its own line.",
-                    fg="yellow",
-                )
-            )
-            pasted_lines: List[str] = []
-            while True:
-                try:
-                    line = input()
-                except EOFError:
-                    break
-                if line.strip() == "END":
-                    break
-                pasted_lines.append(line)
-            text = "\n".join(pasted_lines).strip()
-            if text:
-                print(text)
-                client.record_turn(user_text, text)
-            return text or None
-
         # Normal API mode via core client
         if args.stream:
             try:
@@ -563,38 +646,16 @@ def main(argv: List[str]) -> int:
                 print()
                 print(color("Request failed:", fg="red", bold=True))
                 print(color(f"{e}", fg="red"))
-                if sys.stdin.isatty():
-                    print(color("Switching to manual mode for this turn.", fg="yellow"))
-                    args.manual = True
-                    args.stream = False
-                    return one_turn(user_text)
+                print(
+                    color(
+                        "Central could not process the request. Ensure the model endpoint is available and try again.",
+                        fg="yellow",
+                    )
+                )
                 return None
             print()
             if assistant is not None and ChatClient.wants_helper(assistant):
-                if args.anon_helper:
-                    q = extract_helper_query(assistant)
-                    if q:
-                        print_sanitized_helper_query(q, user_name=args.user_name)
-                # Prompt to choose a helper if none set
-                if not args.helper:
-                    from .commands.helper import choose_helper_interactively
-
-                    chosen = choose_helper_interactively(args.helper)
-                    if chosen and chosen != args.helper:
-                        args.helper = chosen
-                        print(color(f"Helper set to '{args.helper}'.", fg="yellow"))
-                helper_text = manual_helper_stream(args.helper)
-                if args.bypass_helper:
-                    central_reply = manual_central_stream(args.helper)
-                    if central_reply:
-                        wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
-                        client.record_turn(wrapped, central_reply)
-                        print(central_reply)
-                        return central_reply
-                    return assistant
-                final_assistant = process_helper_result(client=client, helper_text=helper_text, stream=bool(args.stream), on_delta=_printer())
-                if final_assistant is not None:
-                    return final_assistant
+                notify_helper_needed()
             return assistant
         else:
             try:
@@ -602,39 +663,17 @@ def main(argv: List[str]) -> int:
             except Exception as e:
                 print(color("Request failed:", fg="red", bold=True))
                 print(color(f"{e}", fg="red"))
-                if sys.stdin.isatty():
-                    print(color("Switching to manual mode for this turn.", fg="yellow"))
-                    args.manual = True
-                    args.stream = False
-                    return one_turn(user_text)
+                print(
+                    color(
+                        "Central could not process the request. Ensure the model endpoint is available and try again.",
+                        fg="yellow",
+                    )
+                )
                 return None
             if assistant is not None:
                 print(assistant)
                 if ChatClient.wants_helper(assistant):
-                    if args.anon_helper:
-                        q = extract_helper_query(assistant)
-                        if q:
-                            print_sanitized_helper_query(q, user_name=args.user_name)
-                    # Prompt to choose a helper if none set
-                    if not args.helper:
-                        from .commands.helper import choose_helper_interactively
-
-                        chosen = choose_helper_interactively(args.helper)
-                        if chosen and chosen != args.helper:
-                            args.helper = chosen
-                            print(color(f"Helper set to '{args.helper}'.", fg="yellow"))
-                    helper_text = manual_helper_stream(args.helper)
-                    if args.bypass_helper:
-                        central_reply = manual_central_stream(args.helper)
-                        if central_reply:
-                            wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
-                            client.record_turn(wrapped, central_reply)
-                            print(central_reply)
-                            return central_reply
-                        return assistant
-                    final_text = process_helper_result(client=client, helper_text=helper_text, stream=bool(args.stream), on_delta=_printer())
-                    if final_text is not None:
-                        return final_text
+                    notify_helper_needed()
             return assistant
 
     # Non-interactive one-shot if stdin is piped and no --user provided
@@ -700,23 +739,12 @@ def main(argv: List[str]) -> int:
             if prompt.startswith("/helper"):
                 parts = prompt.split(maxsplit=1)
                 if len(parts) == 1:
-                    # Clear helper and disable manual if it was only implied by helper
+                    # Clear helper preference
                     args.helper = None
                     print(color("Helper cleared. API mode unchanged.", fg="yellow"))
                 else:
                     args.helper = parts[1].strip()
-                    print(color(f"Helper set to '{args.helper}'. API mode unchanged; used when helper is requested.", fg="yellow"))
-                continue
-
-            if prompt.startswith("/bypass"):
-                tokens = prompt.split()
-                if len(tokens) == 1:
-                    args.bypass_helper = not bool(args.bypass_helper)
-                else:
-                    val = tokens[1].lower()
-                    args.bypass_helper = val in {"1", "true", "on", "yes"}
-                state = "ON" if args.bypass_helper else "OFF"
-                print(color(f"Bypass helper stitching: {state}", fg="yellow"))
+                    print(color(f"Helper set to '{args.helper}'.", fg="yellow"))
                 continue
 
             if prompt.startswith("/name "):
@@ -842,16 +870,17 @@ def main(argv: List[str]) -> int:
                 continue
 
             if prompt in {"/result", "/helper-result", "/paste-helper", "/hr"}:
-                # Explicitly paste a helper response and send it for stitching
-                helper_text = manual_helper_stream(args.helper)
-                if args.bypass_helper:
-                    central_reply = manual_central_stream(args.helper)
-                    if central_reply:
-                        wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
-                        client.record_turn(wrapped, central_reply)
-                        print(central_reply)
+                helper_text = prompt_for_helper_reply()
+                if not helper_text:
+                    continue
+                if args.stream:
+                    final = client.process_helper_result(helper_text, on_delta=_printer())
+                    if final is not None:
+                        print()
                 else:
-                    process_helper_result(client=client, helper_text=helper_text, stream=bool(args.stream), on_delta=_printer())
+                    final = client.process_helper_result(helper_text)
+                    if final is not None:
+                        print(final)
                 continue
 
             helper_suffix = f" [{args.helper}]" if args.helper else ""

@@ -1,6 +1,6 @@
 # CLI Reference
 
-The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports streaming, manual helper pasting, session management, and .env loading.
+The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports streaming, session management, and .env loading.
 
 ## Flags
 
@@ -11,14 +11,13 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `--messages` path: JSON file with an initial messages array
 - `--temperature` float: Sampling temperature (default 0.7)
 - `--max-tokens` int: Max tokens (-1 for unlimited if supported)
-- `--stream`: Enable SSE streaming
+- `--stream`: Enable SSE streaming (skips the interactive prompt)
+- `--no-stream`: Disable SSE streaming without a prompt
 - `--sanitize`: Redact common PII from user text before sending
 - `--raw`: In non-streaming, print raw JSON response
 - `--api-key` string: API key (env `CENTRAL_LLM_API_KEY` or `OPENAI_API_KEY`)
-- `--helper` string: Set a helper label; implies manual paste when needed
-- `--manual`: Manual mode; paste assistant responses (skip API calls)
-- `--bypass-helper`: Bypass helper stitching; you paste the final response (acts as Central)
-- `--anon-helper` / `--no-anon-helper`: Show (or disable) a sanitized copy of the `[HELPER QUERY]` for safe sharing with helpers. Default ON (can be set via `CENTRAL_HELPER_ANON=0`).
+- `--helper` string: Set a helper label for display when helpers are mentioned
+- `--anon-helper` / `--no-anon-helper`: Reserved sanitization toggle for future helper integration (default respects `CENTRAL_HELPER_ANON`).
 - `--show-think`: Include the assistant’s `<think>` reasoning blocks in output/logs (hidden by default).
 - `--sessions-ls`: List saved sessions (with titles) and exit
 - `--sessions-latest`: Show the most recently updated session and exit
@@ -29,11 +28,11 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `--sessions-rename` ID_OR_PATH "NEW TITLE": Rename a saved session’s title and exit
 - `--sessions-merge` ID_OR_INDEX [...]: Merge sessions into a new combined session and exit
 - `--user-name` NAME: Set the input prompt label (default "You"; env `CENTRAL_USER_NAME`)
+- `--version`: Print the Central version and exit
 
 ## Interactive Commands
 
 - `/helper NAME`: Set helper label; `/helper` clears it
-- `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`): Paste helper result to stitch
 - `/sessions` or `/ls`: List saved sessions and titles
 - `/last` (alias `/latest`, `/recent`): Show the most recently updated session
 - `/archive` (alias `/archive-early`, `/archive-old`): Merge all but the latest session into `memory/early-archives/`
@@ -45,22 +44,41 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `/rename ID NAME`: Rename any saved session’s title
 - `/merge A B ...`: Merge sessions by ids or indices
 - `/name NAME`: Set your input prompt label for this session
-- `/bypass-helper` (or `/bypass`, `/act-as-central`, `/iam-central`): Toggle bypass mode
-- `/anon` (or `/anon-helper`): Toggle helper-query anonymization output
+- `/anon` (or `/anon-helper`): Reserved helper-query anonymization toggle (no effect until helper automation ships)
 - `/reset`: Reset context to just the system message
 - `exit` / `quit`: Exit the session
 
 ## Helper Flow
 
-- Central asks for a helper (emits `[HELPER QUERY]` or fallback) → CLI prompts `Helper [NAME]: (paste streaming lines; type END ...)`.
-- If no helper is set, the CLI asks you to choose one (from `CENTRAL_HELPERS` or defaults).
-- Paste multi-line content; each line echoes immediately. Finish by typing `END`.
-- CLI wraps paste as `[HELPER RESULT]...[/HELPER RESULT]`, sends to Central, and streams stitched output when `--stream` is enabled.
-- Default helper names you can use: CodeSmith, DataDive, ResearchSleuth, UIWhisperer, OpsSentinel, LegalEagle. Override with `CENTRAL_HELPERS="Name1,Name2"` if you prefer your own roster.
+Central tries to answer locally first. If it needs an external helper it:
+
+1. Confirms which helper label to use (from env/config/defaults).
+2. Emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]` and tells you it is waiting for an external reply.
+3. If automation is disabled (default for the standalone core), it reminds you to paste the helper output with `/result` and notes that the full Noctics suite + router enables automatic routing.
+4. When you paste the helper response, `ChatClient.process_helper_result` stitches it in and the conversation continues.
+
+Sanitisation honours `CENTRAL_HELPER_ANON` and name redaction env vars. You can preconfigure helper rosters and automation flags via `central/config.py` (JSON) or environment variables.
+
+### Configuration quick reference
+
+- Primary overrides come from environment variables (`CENTRAL_*`).
+- Optional JSON config: `config/central.json` (or a path supplied via `CENTRAL_CONFIG`) with structure:
+
+```json
+{
+  "helper": {
+    "automation": false,
+    "roster": ["claude", "gpt-4o"]
+  }
+}
+```
+
+Environment variables take precedence over the JSON file.
 
 ## First Prompt Experience
 
-- On the first user message of a new session, the CLI proposes a short session title derived from your request.
+- At startup (unless `--dev` is supplied) the CLI lists any known users, lets you pick one or create a new profile, and asks whether you want streaming enabled. It also logs a `Hardware context: …` line to the system prompt so the assistant knows where it is running.
+- On the first user message of a new session, the CLI still proposes a short session title derived from your request.
 - You can add clarifying notes before the message is sent, accept the suggested title, or type a custom one (or press Enter to skip).
 - After this first turn, the chat proceeds normally; you can still rename later with `/title` or `/rename`.
 
@@ -76,9 +94,7 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 
 ## Examples
 
-- Stream with helper stitching: `python main.py --stream`
-- Manual assistant everywhere: `python main.py --manual`
-- If Central cannot be reached, the interactive CLI automatically falls back to manual mode so you can paste assistant replies.
+- Stream a conversation: `python main.py --stream`
 - Name a helper and stream: `python main.py --helper claude --stream`
 - One-off question with stream: `python main.py --user "Explain vector clocks" --stream`
 - Provide messages array: `python main.py --messages msgs.json --stream`

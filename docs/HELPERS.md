@@ -1,54 +1,20 @@
 # Helper Workflow
 
-Central supports a manual helper workflow when the model asks for external assistance.
+Central v0 keeps helpers manual by design. It detects when the assistant wants outside help, sanitises the payload, and guides you through the copy/paste loop. Automatic routing is reserved for the upcoming Noctics router service, but you can already customise the roster and automation toggle via environment variables or `config/central.json`.
 
-## When does it trigger?
+## Helper labels
 
-- Central emits a `[HELPER QUERY]...[/HELPER QUERY]` block, or
-- Central falls back to a helper-required message.
+- Set a label with `--helper NAME` or `/helper NAME`; clear it with `/helper`.
+- If no label is set, the CLI prompts you to choose one when the helper request happens (env roster, JSON config roster, or defaults).
+- You can define a roster in config: `config/central.json` → `{ "helper": { "roster": ["claude", "gpt-4o"] } }`. Environment `CENTRAL_HELPERS` overrides both config and defaults.
 
-The CLI detects this and prompts you to paste the helper output.
+## Sanitized helper queries
 
-If no helper is set, the CLI asks you to choose a helper label first. It lists helpers from `CENTRAL_HELPERS` (comma‑separated) or a small default list. You can type a number or a custom name.
+PII redaction (`--sanitize`) still runs first. `CENTRAL_REDACT_NAMES` masks additional names, and the helper block is always wrapped in `[HELPER QUERY]…[/HELPER QUERY]` / `[HELPER RESULT]…[/HELPER RESULT]`. `--anon-helper` remains reserved for when router automation ships.
 
-## How to paste helper output
+## What happens today?
 
-- You’ll see: `Helper [NAME]: (paste streaming lines; type END on its own line to finish)`.
-- Paste the helper output line-by-line; each line echoes immediately (simulated streaming).
-- Type `END` on a new line to finish.
-
-The CLI then wraps your paste as a `[HELPER RESULT]...[/HELPER RESULT]` message and sends it back to Central.
-
-## Anonymizing helper queries
-
-When Central asks for a helper and emits a `[HELPER QUERY]...[/HELPER QUERY]` block, the CLI also prints a sanitized version for safe copy/paste by default. It removes common PII (emails, phone numbers, credit cards, IPv4 addresses) and can redact names.
-
-- Toggle with `--anon-helper` / `--no-anon-helper` or interactively with `/anon`.
-- Configure extra names to redact with `CENTRAL_REDACT_NAMES="Alice,Bob,Acme"`.
-- The interactive prompt label (from `--user-name`) is also redacted when it’s not the generic "You".
-
-## Manually trigger a stitch
-
-- Use `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`) to paste a helper result at any time.
-
-## With streaming
-
-- If `--stream` is enabled, Central’s stitched response is streamed back after you finish pasting.
-
-## Labeling a helper
-
-- Set a helper label via `--helper NAME` or `/helper NAME`. The label appears in the prompt and helps track which helper provided the result.
-- If unset, you’ll be prompted to pick one when a helper is required.
-
-### Built-in helper roster
-
-Central ships with a default set of helper personas. You can type their names when prompted, or set them explicitly with `--helper` / `/helper`:
-
-- **CodeSmith** — deep coding support: implementation plans, API integration, debugging, refactors.
-- **DataDive** — analytics, spreadsheets, SQL, KPI reviews, lightweight statistical checks.
-- **ResearchSleuth** — synthesises sources, extracts facts, drafts briefs, compares documents.
-- **UIWhisperer** — UX copy, product messaging, tone-of-voice, onboarding flows.
-- **OpsSentinel** — infrastructure and automation help: deployment, runbooks, incident response.
-- **LegalEagle** — policy, compliance, contract language (non-binding guidance only).
-
-If you define your own roster, set `CENTRAL_HELPERS="NameOne,NameTwo"` and they’ll appear in the picker.
+1. Central emits a human-friendly explanation plus the `[HELPER QUERY]` block.
+2. If automation is disabled, the CLI tells you to consult the chosen helper and paste the result using `/result` (ending input with a single `.` line).
+3. `ChatClient.process_helper_result` consumes the pasted text and logs it as part of the conversation.
+4. If you deploy Central within the full Noctics suite, set `CENTRAL_HELPER_AUTOMATION=1` (or turn it on in `config/central.json`) so the router can perform the helper call automatically.

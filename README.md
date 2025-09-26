@@ -1,6 +1,8 @@
 # Noctics Central Core
 
-Local, privacy-first chat orchestration with optional manual helper flow, streaming, and session logging. Ships with a thin CLI (`central/cli.py`) and an importable core (`central/core.py`). No external runtime dependencies.
+Local, privacy-first chat orchestration with helper-aware streaming and session logging. Ships with a thin CLI (`central/cli.py`) and an importable core (`central/core.py`). No external runtime dependencies.
+
+**Current version:** `v0` (`0.0.0`)
 
 ## Quick Start
 
@@ -10,10 +12,12 @@ Local, privacy-first chat orchestration with optional manual helper flow, stream
   - Copy `.env.example` to `.env` and adjust values
 - Run the CLI:
   - `python main.py`
+- Check the bundled version:
+  - `python main.py --version`
 
-## .env Support
+## Configuration
 
-Central loads `.env` automatically from both the package folder and the current working directory. Existing environment variables are not overwritten.
+Central loads `.env` automatically from both the package folder and the current working directory. Existing environment variables are not overwritten. You can also provide a JSON config via `CENTRAL_CONFIG` or `config/central.json`; see `config/central.example.json` for the schema (currently helper automation toggle and custom helper roster).
 
 - `CENTRAL_LLM_URL` (default `http://localhost:1234/v1/chat/completions`)
 - `CENTRAL_LLM_MODEL` (default `qwen/qwen3-1.7b`)
@@ -23,6 +27,7 @@ Central loads `.env` automatically from both the package folder and the current 
 - `CENTRAL_HELPERS` (optional): comma-separated helper names to present when choosing a helper
 - `CENTRAL_DEV_NAME` (optional): if set, used as your prompt label and appended as identity context (e.g., "The user 'Rei' is the developer of Noctics.")
 - `NOCTICS_PROJECT_NAME` (optional, default `Noctics`): used in the identity context above
+- `CENTRAL_HELPER_AUTOMATION` (optional): set to `1/true/on` when a router is available and you want automatic helper dispatching.
 
 Example `.env`:
 
@@ -39,18 +44,15 @@ CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
 - ChatClient (importable): stateful conversation + streaming + helper stitching + logging
 - CLI: interactive wrapper over ChatClient
 - Sessions: JSONL logs with `.meta.json` sidecar including a human title
-- Helper flow: when Central requests a helper, you paste the helper output (line-by-line stream) and Central stitches the result
+- Helper flow: Central may request a helper; the CLI informs you that automated helper integration is not available yet
 
 ## CLI Usage (highlights)
 
 - Normal streaming:
   - `python main.py --stream`
-- Manual assistant replies for every turn (no API):
-  - `python main.py --manual`
-- When Central is unreachable and you are in an interactive shell, the CLI auto-switches to manual mode so you can paste replies.
 - Show the model's raw `<think>` reasoning (hidden by default):
   - `python main.py --show-think`
-- Name a helper (implies manual paste prompt when needed):
+- Name a helper label for helper-related prompts:
   - `python main.py --helper claude`
 - List saved sessions and titles:
   - `python main.py --sessions-ls`
@@ -61,19 +63,18 @@ CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
 
 See `docs/CLI.md` for all flags and interactive commands.
 
-## Helper Flow (manual paste)
+## Helper Flow
 
-- Central outputs a `[HELPER QUERY]...[/HELPER QUERY]` or fallback message → CLI prompts:
-  - `Helper [NAME]: (paste streaming lines; type END on its own line to finish)`
-- Paste the helper output line-by-line; each line echoes instantly (simulated stream)
-- Type `END` to finish; CLI wraps it as `[HELPER RESULT]...[/HELPER RESULT]` and sends to Central
-- With `--stream`, Central’s stitched response streams live back to you
+Central first tries to answer locally. If it needs outside help, it:
 
-You can also trigger the stitch manually anytime with `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`).
+1. Confirms which helper you want (pick from the configured roster or type your own label).
+2. Emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]` block and tells you it is awaiting a helper result.
+3. If the standalone core can’t call helpers automatically, it reminds you to paste the `[HELPER RESULT]` with `/result` (and points you to the full Noctics suite + router for automation).
+4. When you paste the helper output, it wraps it and feeds it through `ChatClient.process_helper_result` so the conversation continues seamlessly.
 
-Privacy: When Central asks for a helper and emits a `[HELPER QUERY]` block, the CLI prints a sanitized version by default for safe copy/paste (redacts emails/phones/cards/IPs and optional names). Toggle with `--anon-helper` / `--no-anon-helper` or `/anon`.
+Privacy: Helper requests are always sanitized (PII redaction + optional name masking). Automation is disabled by default; toggle it with `CENTRAL_HELPER_AUTOMATION` or the JSON config once you wire in the router.
 
-Selecting a helper: If you haven’t set `--helper`, the CLI will ask you to choose one when needed (from `CENTRAL_HELPERS` or a default list). You can type a number or a custom name.
+Selecting a helper: If you haven’t set `--helper`, the CLI asks you to choose one when the request happens (from `CENTRAL_HELPERS`, config roster, or defaults). You can type a number or a custom name.
 
 Built-in helper names (override with `CENTRAL_HELPERS`):
 - claude (Anthropic)
@@ -85,7 +86,7 @@ Built-in helper names (override with `CENTRAL_HELPERS`):
 - cohere (Cohere)
 - deepseek (DeepSeek)
 
-First prompt: When you send the very first message, the CLI proposes a short session title based on your request, offers a chance to add clarifying details, and lets you accept or override the title before the request goes to Central.
+First prompt: When you start the CLI it now asks for your username (unless `--dev` is supplied) and whether you want streaming enabled. On the very first message within a session, the CLI still proposes a short title based on your request and lets you accept or override it. A `Hardware context: …` line is also injected into the system prompt so the assistant knows which OS/CPU/memory it is running on.
 
 ## Sessions
 
@@ -145,7 +146,6 @@ print("log:", client.log_path())
 ## Interactive Commands (CLI)
 
 - `/helper NAME`: set helper label; `/helper` clears
-- `/result` (aliases: `/helper-result`, `/paste-helper`, `/hr`): paste helper result
 - `/iam-dev NAME`: mark yourself as the developer for this session (injects identity context)
 - `/sessions` or `/ls`: list saved sessions + titles
 - `/last`: show the most recently updated session
@@ -166,7 +166,6 @@ print("log:", client.log_path())
 
 ## Notes
 
-- Manual streaming is line-based. Type `END` to finish the paste.
 - PII redaction: enable with `--sanitize` to redact common PII in user input before sending.
 - The CLI prints the session log path on start and confirms a saved title on exit.
 

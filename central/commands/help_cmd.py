@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from central.colors import color
 from central.core import ChatClient
+from central.commands.helper import describe_helper_status
 
 
 def print_help(client: ChatClient, *, user_name: str = "You") -> None:
@@ -13,7 +14,7 @@ def print_help(client: ChatClient, *, user_name: str = "You") -> None:
     print(color("  /help          show this help", fg="yellow"))
     print(color("  /helper NAME   set helper label (used when a helper is requested)", fg="yellow"))
     print(color("  /helper        clear helper label", fg="yellow"))
-    print(color("  /result        paste a Helper Result to stitch", fg="yellow"))
+    print(color("  /result        paste a helper reply for Central to stitch", fg="yellow"))
     print(color("  /iam NAME      mark yourself as the developer for this session", fg="yellow"))
     print(color("  /ls            list saved sessions with titles", fg="yellow"))
     print(color("  /last          show the most recently updated session", fg="yellow"))
@@ -25,15 +26,14 @@ def print_help(client: ChatClient, *, user_name: str = "You") -> None:
     print(color("  /merge A B..   merge sessions by ids or indices", fg="yellow"))
     print(color("  /reset         reset context to just the system message", fg="yellow"))
     print(color("  /name NAME     set the input prompt label (default: You)", fg="yellow"))
-    print(color("  /anon          toggle sanitized helper-query output", fg="yellow"))
+    print(color("  /anon          reserved helper sanitization toggle", fg="yellow"))
     print(color("Docs: README.md, docs/CLI.md, docs/SESSIONS.md, docs/HELPERS.md", fg="yellow"))
     print(color("Tip: run with --help to see all CLI flags.", fg="yellow"))
+    print(color(f"Helpers: {describe_helper_status()}", fg="yellow"))
     print()
     print(color("Examples:", fg="yellow", bold=True))
     print(color("  python main.py --stream", fg="yellow"))
-    print(color("  python main.py --manual", fg="yellow"))
     print(color("  python main.py --helper claude --stream", fg="yellow"))
     print(color("  /helper claude    (set helper label)", fg="yellow"))
-    print(color("  /result            (paste helper result to stitch)", fg="yellow"))
     print(color("  /ls                (list saved sessions)", fg="yellow"))
     print(color("  /load 1            (load most recent by index)", fg="yellow"))

@@ -2,8 +2,8 @@
 """Generate a synthetic self-improvement dataset for Central.
 
 The script writes curated conversations that demonstrate Central's
-core behaviours (privacy, helper workflow, memory discipline, manual
-fallback, session guidance). Each conversation is treated as a
+core behaviours (privacy, helper workflow, memory discipline,
+connectivity guidance, session management). Each conversation is treated as a
 "memory" sample suitable for fine-tuning or evaluation.
 
 Usage:
@@ -156,9 +156,9 @@ SCENARIOS: List[Scenario] = [
         ],
     ),
     Scenario(
-        identifier="manual-fallback",
-        title="Manual Fallback Procedure",
-        tags=["manual", "connectivity"],
+        identifier="connectivity-guidance",
+        title="Connectivity Guidance",
+        tags=["connectivity", "support"],
         messages=[
             {
                 "role": "user",
@@ -169,10 +169,8 @@ SCENARIOS: List[Scenario] = [
             {
                 "role": "assistant",
                 "content": (
-                    "If connectivity fails I switch to manual mode automatically:\n"
-                    "1. Warn the user Central is unreachable.\n"
-                    "2. Invite them to paste the assistant reply manually.\n"
-                    "3. Continue logging the turn so the session is complete.\n"
+                    "If connectivity fails I inform the user right away and recommend they restart or verify the local model server.\n"
+                    "Once the endpoint responds again, I continue the conversation from where we left off.\n"
                     "Confidence: 7/10"
                 ),
             },
