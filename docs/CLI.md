@@ -45,6 +45,8 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `/merge A B ...`: Merge sessions by ids or indices
 - `/name NAME`: Set your input prompt label for this session
 - `/anon` (or `/anon-helper`): Reserved helper-query anonymization toggle (no effect until helper automation ships)
+- `/result`: Paste a helper reply so Central can stitch it into the conversation
+- `/shell CMD`: Run a local shell command (developer mode only); output is logged into the session
 - `/reset`: Reset context to just the system message
 - `exit` / `quit`: Exit the session
 
@@ -75,9 +77,16 @@ Sanitisation honours `CENTRAL_HELPER_ANON` and name redaction env vars. You can 
 
 Environment variables take precedence over the JSON file.
 
+### Developer mode shell automation
+
+- When `--dev` is supplied, the model is encouraged (see `memory/system_prompt.txt`) to issue `[DEV SHELL COMMAND]…[/DEV SHELL COMMAND]` blocks for local diagnostics (for example “`ip addr show`”).
+- The CLI executes those commands automatically, prints the output as `[DEV SHELL RESULT]`, and appends it to the session so follow-up answers can reference the data.
+- You can still run commands manually via `/shell CMD`.
+
 ## First Prompt Experience
 
 - At startup (unless `--dev` is supplied) the CLI lists any known users, lets you pick one or create a new profile, and asks whether you want streaming enabled. It also logs a `Hardware context: …` line to the system prompt so the assistant knows where it is running.
+- The default developer identity is Rei, a 20-year-old solo creator of Central; the system prompt carries that context so replies stay personable. You can override with `--dev` or environment variables (`CENTRAL_DEV_NAME`, etc.). Developer mode also unlocks `/shell` for local command inspection.
 - On the first user message of a new session, the CLI still proposes a short session title derived from your request.
 - You can add clarifying notes before the message is sent, accept the suggested title, or type a custom one (or press Enter to skip).
 - After this first turn, the chat proceeds normally; you can still rename later with `/title` or `/rename`.

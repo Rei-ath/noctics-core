@@ -45,6 +45,8 @@ CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
 - CLI: interactive wrapper over ChatClient
 - Sessions: JSONL logs with `.meta.json` sidecar including a human title
 - Helper flow: Central may request a helper; the CLI informs you that automated helper integration is not available yet
+- Developer identity: Central defaults to recognising Rei—a 20-year-old solo developer building this personal assistant—and weaves that context into the system prompt for rapport.
+- Developer mode (`--dev`): exposes local shell access via `/shell CMD`, lets the assistant emit `[DEV SHELL COMMAND]…[/DEV SHELL COMMAND]` to run diagnostics automatically, prints hardware context, and bypasses the user-selection onboarding.
 
 ## CLI Usage (highlights)
 
