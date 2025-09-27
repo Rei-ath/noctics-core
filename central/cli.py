@@ -637,49 +637,14 @@ def main(argv: List[str]) -> int:
         if first_prompt_handled:
             return user_text
 
-        proposed_title = compute_title_from_messages(client.messages + [{"role": "user", "content": user_text}])
-
         if not title_confirmed:
-            if allow_interactive and sys.stdin.isatty():
-                if proposed_title:
-                    print(color(f"Proposed session title: {proposed_title}", fg="yellow"))
-                else:
-                    print(color("Proposed session title: (unable to summarize)", fg="yellow"))
-
-                try:
-                    extra = input(color("Add clarifications (optional, press Enter to skip): ", fg="yellow"))
-                except EOFError:
-                    extra = ""
-                if extra.strip():
-                    user_text = f"{user_text}\n\nClarification: {extra.strip()}"
-                    proposed_title = compute_title_from_messages(
-                        client.messages + [{"role": "user", "content": user_text}]
-                    ) or proposed_title
-
-                prompt = "Session title"
-                if proposed_title:
-                    prompt += f" [{proposed_title}]"
-                prompt += ": "
-                try:
-                    resp = input(color(prompt, fg="yellow"))
-                except EOFError:
-                    resp = ""
-                resp = resp.strip()
-                if resp:
-                    client.set_session_title(resp, custom=True)
-                    print(color(f"Session titled: {resp}", fg="yellow"))
-                    title_confirmed = True
-                elif proposed_title:
-                    client.set_session_title(proposed_title, custom=False)
-                    print(color(f"Session title set: {proposed_title}", fg="yellow"))
-                    title_confirmed = True
-                else:
-                    title_confirmed = True
-            else:
-                if proposed_title:
-                    client.set_session_title(proposed_title, custom=False)
-                    print(color(f"Session title set: {proposed_title}", fg="yellow"))
-                    title_confirmed = True
+            auto_title = compute_title_from_messages(
+                client.messages + [{"role": "user", "content": user_text}]
+            )
+            if auto_title:
+                client.set_session_title(auto_title, custom=False)
+                print(color(f"Session title set: {auto_title}", fg="yellow"))
+                title_confirmed = True
 
         first_prompt_handled = True
         return user_text
