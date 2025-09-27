@@ -567,11 +567,9 @@ def main(argv: List[str]) -> int:
             args.system = user_line
 
     helper_roster = get_helper_candidates()
-    dev_identity = resolve_developer_identity()
     hardware_brief = hardware_info.replace("OS: ", "").split(";")[0][:22]
     roster_brief = ", ".join(helper_roster) if helper_roster else "(none)"
     roster_brief = roster_brief[:22]
-    developer_name = dev_identity.display_name[:22]
     operator_name = identity.display_name[:22]
 
     def print_status_block() -> None:
@@ -584,7 +582,6 @@ def main(argv: List[str]) -> int:
         status_lines = [
             color("╔══════════[ CENTRAL STATUS ]══════════╗", fg="cyan", bold=True),
             color(f"║ Version        : {__version__:<22}║", fg="cyan"),
-            color(f"║ Developer      : {developer_name:<22}║", fg="cyan"),
             color(f"║ Operator       : {operator_name:<22}║", fg="cyan"),
             color(f"║ Hardware       : {hardware_brief:<22}║", fg="cyan"),
             color(f"║ Helper Auto    : {automation:<22}║", fg="cyan"),
@@ -592,6 +589,10 @@ def main(argv: List[str]) -> int:
             color(f"║ Sessions Saved : {session_count:<22}║", fg="cyan"),
             color("╚══════════════════════════════════════╝", fg="cyan", bold=True),
         ]
+        if getattr(args, "dev", False):
+            dev_identity = resolve_developer_identity()
+            developer_name = dev_identity.display_name[:22]
+            status_lines.insert(2, color(f"║ Developer      : {developer_name:<22}║", fg="cyan"))
         seen = set()
         for line in status_lines:
             if line in seen:
