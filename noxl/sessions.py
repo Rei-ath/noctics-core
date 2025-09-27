@@ -485,8 +485,11 @@ def archive_early_sessions(
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     archive_stem = f"session-early-archive-{timestamp}"
-    archive_log = merged_path.with_name(f"{archive_stem}.jsonl")
-    merged_path.rename(archive_log)
+    archive_log = merged_path.with_name(f"{archive_stem}.json")
+
+    records = load_session_records(merged_path)
+    archive_log.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    merged_path.unlink(missing_ok=True)
 
     merged_meta_path = merged_path.with_name(merged_path.stem + ".meta.json")
     archive_meta_path = archive_log.with_name(f"{archive_stem}.meta.json")
