@@ -276,8 +276,6 @@ def main(argv: List[str]) -> int:
     args = parse_args(argv)
 
     if getattr(args, "version", False):
-        from .version import __version__
-
         print(__version__)
         return 0
 
