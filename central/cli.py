@@ -51,6 +51,7 @@ from .commands.sessions import (
 )
 from .commands.help_cmd import print_help as cmd_print_help
 from interfaces.dotenv import load_local_dotenv
+from interfaces.dev_identity import resolve_developer_identity
 from .system_info import hardware_summary
 from .version import __version__
 
@@ -566,9 +567,12 @@ def main(argv: List[str]) -> int:
             args.system = user_line
 
     helper_roster = get_helper_candidates()
+    dev_identity = resolve_developer_identity()
     hardware_brief = hardware_info.replace("OS: ", "").split(";")[0][:22]
     roster_brief = ", ".join(helper_roster) if helper_roster else "(none)"
     roster_brief = roster_brief[:22]
+    developer_name = dev_identity.display_name[:22]
+    operator_name = identity.display_name[:22]
 
     def print_status_block() -> None:
         if not interactive:
@@ -580,7 +584,8 @@ def main(argv: List[str]) -> int:
         status_lines = [
             color("╔══════════[ CENTRAL STATUS ]══════════╗", fg="cyan", bold=True),
             color(f"║ Version        : {__version__:<22}║", fg="cyan"),
-            color(f"║ Developer      : {identity.display_name:<22}║", fg="cyan"),
+            color(f"║ Developer      : {developer_name:<22}║", fg="cyan"),
+            color(f"║ Operator       : {operator_name:<22}║", fg="cyan"),
             color(f"║ Hardware       : {hardware_brief:<22}║", fg="cyan"),
             color(f"║ Helper Auto    : {automation:<22}║", fg="cyan"),
             color(f"║ Helper Roster  : {roster_brief:<22}║", fg="cyan"),
