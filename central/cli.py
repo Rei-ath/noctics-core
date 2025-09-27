@@ -309,7 +309,8 @@ def main(argv: List[str]) -> int:
     helper_status_line = describe_helper_status()
     if interactive:
         print(color(f"Helpers: {helper_status_line}", fg="yellow"))
-    hardware_line = f"Hardware context: {hardware_summary()}"
+    hardware_info = hardware_summary()
+    hardware_line = f"Hardware context: {hardware_info}"
 
     if args.stream is None:
         if interactive:
@@ -539,9 +540,6 @@ def main(argv: List[str]) -> int:
                 args.system = (content + ("\n\n" if content else "") + hardware_line).strip()
         else:
             args.system = hardware_line
-    if interactive:
-        print(color(hardware_line, fg="yellow"))
-
     user_line = f"User handle: {args.user_name}"
     user_inserted = False
     for msg in messages:
@@ -568,6 +566,9 @@ def main(argv: List[str]) -> int:
             args.system = user_line
 
     helper_roster = get_helper_candidates()
+    hardware_brief = hardware_info.replace("OS: ", "").split(";")[0][:22]
+    roster_brief = ", ".join(helper_roster) if helper_roster else "(none)"
+    roster_brief = roster_brief[:22]
 
     def print_status_block() -> None:
         if not interactive:
@@ -580,12 +581,17 @@ def main(argv: List[str]) -> int:
             color("╔══════════[ CENTRAL STATUS ]══════════╗", fg="cyan", bold=True),
             color(f"║ Version        : {__version__:<22}║", fg="cyan"),
             color(f"║ Developer      : {identity.display_name:<22}║", fg="cyan"),
+            color(f"║ Hardware       : {hardware_brief:<22}║", fg="cyan"),
             color(f"║ Helper Auto    : {automation:<22}║", fg="cyan"),
-            color(f"║ Helper Roster  : {roster:<22}║", fg="cyan"),
+            color(f"║ Helper Roster  : {roster_brief:<22}║", fg="cyan"),
             color(f"║ Sessions Saved : {session_count:<22}║", fg="cyan"),
             color("╚══════════════════════════════════════╝", fg="cyan", bold=True),
         ]
+        seen = set()
         for line in status_lines:
+            if line in seen:
+                continue
+            seen.add(line)
             print(line)
 
     if interactive:
