@@ -542,6 +542,31 @@ def main(argv: List[str]) -> int:
     if interactive:
         print(color(hardware_line, fg="yellow"))
 
+    user_line = f"User handle: {args.user_name}"
+    user_inserted = False
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "system" and user_line in str(msg.get("content") or ""):
+            user_inserted = True
+            break
+    if not user_inserted:
+        inserted = False
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                content = str(msg.get("content") or "").strip()
+                content = (content + ("\n\n" if content else "") + user_line).strip()
+                messages[i]["content"] = content
+                inserted = True
+                break
+        if not inserted:
+            messages.insert(0, {"role": "system", "content": user_line})
+        if args.system:
+            content = args.system.strip()
+            if user_line not in content:
+                args.system = (content + ("\n\n" if content else "") + user_line).strip()
+        else:
+            args.system = user_line
+
     helper_roster = get_helper_candidates()
 
     def print_status_block() -> None:
