@@ -87,7 +87,7 @@ Environment variables take precedence over the JSON file.
 - At startup (unless `--dev` is supplied) the CLI lists any known users, shows existing sessions (via `noxl`) so you can load one, and asks whether you want streaming enabled. It also logs a `Hardware context: …` line to the system prompt so the assistant knows where it is running.
 - The default developer identity is Rei, a 20-year-old solo creator of Central; the system prompt carries that context so replies stay personable. You can override with `--dev` or environment variables (`CENTRAL_DEV_NAME`, etc.). Developer mode also unlocks `/shell` for local command inspection and allows Central to issue `[DEV SHELL COMMAND]…` blocks automatically.
 - On a brand-new install (no prior sessions), Central asks the model for a friendly session title and applies it automatically. During the conversation, Central can rename the session by emitting `[SET TITLE]New Name[/SET TITLE]`.
-- You can add clarifying notes before the message is sent, accept the suggested title, or type a custom one (or press Enter to skip).
+- Titles are applied automatically; use `/title`, `/rename`, or `[SET TITLE]New Name[/SET TITLE]` if you want to override them later.
 - After this first turn, the chat proceeds normally; you can still rename later with `/title` or `/rename`.
 - Environment toggles: set `CENTRAL_SHOW_SYSTEM_PROMPT=1` if you want the raw system prompt to print, and `CENTRAL_SHOW_HELP=1` if you prefer the startup help banner.
 
