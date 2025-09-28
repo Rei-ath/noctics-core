@@ -22,8 +22,16 @@ class LLMTransport:
         stream: bool = False,
         on_chunk: Optional[Callable[[str], None]] = None,
     ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
-        data = json.dumps(payload).encode("utf-8")
+        send_payload = dict(payload)
+        if "/api/generate" in self.url:
+            send_payload.pop("messages", None)
+        data = json.dumps(send_payload).encode("utf-8")
         req = Request(self.url, data=data, headers=self._headers(), method="POST")
+        if "/api/generate" in self.url:
+            if stream:
+                text = self._stream_generate(req, on_chunk)
+                return text, None
+            return self._request_generate(req)
         if stream:
             text = self._stream_sse(req, on_chunk)
             return text, None
@@ -65,6 +73,36 @@ class LLMTransport:
         except Exception:
             message = None
         return message, obj
+
+    def _request_generate(self, req: Request) -> Tuple[Optional[str], Dict[str, Any]]:
+        try:
+            with urlopen(req) as resp:  # nosec - local/dev usage
+                charset = resp.headers.get_content_charset() or "utf-8"
+                body = resp.read().decode(charset)
+        except HTTPError as he:
+            body = _extract_error_body(he)
+            message = _http_error_message(he, suffix=body)
+            raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
+        except URLError as ue:
+            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
+        except OSError as oe:
+            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
+
+        lines = [line for line in body.splitlines() if line.strip()]
+        responses: list[str] = []
+        payloads: list[Dict[str, Any]] = []
+        for line in lines:
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            payloads.append(data)
+            if data.get("error"):
+                raise URLError(str(data["error"]))
+            text = data.get("response") or ""
+            if text:
+                responses.append(text)
+        return ("".join(responses) if responses else None, {"responses": payloads})
 
     def _stream_sse(
         self,
@@ -114,6 +152,45 @@ class LLMTransport:
 
         return "".join(acc)
 
+    def _stream_generate(
+        self,
+        req: Request,
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> str:
+        try:
+            with urlopen(req) as resp:  # nosec - local/dev usage
+                charset = resp.headers.get_content_charset() or "utf-8"
+                acc: list[str] = []
+                while True:
+                    line_bytes = resp.readline()
+                    if not line_bytes:
+                        break
+                    line = line_bytes.decode(charset, errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("error"):
+                        raise URLError(str(data["error"]))
+                    text = data.get("response")
+                    if text:
+                        acc.append(text)
+                        if on_chunk:
+                            on_chunk(text)
+                    if data.get("done"):
+                        break
+        except HTTPError as he:
+            message = _http_error_message(he)
+            raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
+        except URLError as ue:
+            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
+        except OSError as oe:
+            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
+
+        return "".join(acc)
+
 
 def _extract_error_body(error: HTTPError) -> str:
     try:
@@ -151,4 +228,3 @@ def _extract_sse_piece(data_str: str) -> Optional[str]:
     if piece is None:
         piece = choice.get("text")
     return piece
-

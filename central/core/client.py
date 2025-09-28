@@ -20,11 +20,12 @@ from noxl import (
 )
 
 from ..transport import LLMTransport
+from ..connector import CentralConnector, build_connector
 from .helper_prompt import load_helper_prompt
 from .payloads import build_payload
-from .reasoning import extract_public_segments, strip_chain_of_thought
+from .reasoning import clean_public_reply, extract_public_segments, strip_chain_of_thought
 
-DEFAULT_URL = "http://localhost:1234/v1/chat/completions"
+DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
 
 
 class ChatClient:
@@ -46,6 +47,7 @@ class ChatClient:
         memory_user: Optional[str] = None,
         memory_user_display: Optional[str] = None,
         transport: Optional[LLMTransport] = None,
+        connector: Optional[CentralConnector] = None,
     ) -> None:
         try:
             load_local_dotenv(Path(__file__).resolve().parent)
@@ -55,12 +57,15 @@ class ChatClient:
         resolved_url = url or os.getenv("CENTRAL_LLM_URL", DEFAULT_URL)
         resolved_api_key = api_key or (os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
 
+        connector = connector or build_connector(url=resolved_url, api_key=resolved_api_key)
+        self.connector = connector
+
         if transport is None:
-            self.transport = LLMTransport(resolved_url, resolved_api_key)
-        else:
-            self.transport = transport
-            resolved_url = transport.url
-            resolved_api_key = transport.api_key
+            transport = connector.connect()
+
+        self.transport = transport
+        resolved_url = getattr(transport, "url", resolved_url)
+        resolved_api_key = getattr(transport, "api_key", resolved_api_key)
 
         self.url = resolved_url
         self.model = model
@@ -203,6 +208,7 @@ class ChatClient:
                     public_text = public_state.get("public", "")
                     if len(assistant) > len(public_text):
                         on_delta(assistant[len(public_text):])
+            assistant = clean_public_reply(assistant) or ""
             self.messages.append({"role": "user", "content": to_send_user})
             self.messages.append({"role": "assistant", "content": assistant})
             if self.logger:
@@ -220,6 +226,7 @@ class ChatClient:
         to_send_user = pii_sanitize(user_text) if self.sanitize else user_text
         if self.strip_reasoning:
             assistant_text = strip_chain_of_thought(assistant_text)
+        assistant_text = clean_public_reply(assistant_text) or ""
         self.messages.append({"role": "user", "content": to_send_user})
         self.messages.append({"role": "assistant", "content": assistant_text})
         if self.logger:
@@ -258,6 +265,7 @@ class ChatClient:
         if reply is not None:
             if self.strip_reasoning:
                 reply = strip_chain_of_thought(reply)
+            reply = clean_public_reply(reply) or ""
             self.messages.append({"role": "user", "content": helper_wrapped})
             self.messages.append({"role": "assistant", "content": reply})
             if self.logger:
@@ -319,4 +327,3 @@ class ChatClient:
 
 
 __all__ = ["ChatClient", "DEFAULT_URL"]
-
