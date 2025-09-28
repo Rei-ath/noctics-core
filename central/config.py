@@ -9,7 +9,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-__all__ = ["CentralConfig", "HelperConfig", "get_runtime_config", "reload_config"]
+__all__ = [
+    "CentralConfig",
+    "HelperConfig",
+    "DeveloperConfig",
+    "get_runtime_config",
+    "reload_config",
+]
 
 _CONFIG_ENV = "CENTRAL_CONFIG"
 _DEFAULT_CONFIG_LOCATIONS: tuple[Path, ...] = (
@@ -27,8 +33,14 @@ class HelperConfig:
 
 
 @dataclass(slots=True)
+class DeveloperConfig:
+    passphrase: Optional[str] = None
+
+
+@dataclass(slots=True)
 class CentralConfig:
     helper: HelperConfig = field(default_factory=HelperConfig)
+    developer: DeveloperConfig = field(default_factory=DeveloperConfig)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CentralConfig":
@@ -37,7 +49,11 @@ class CentralConfig:
         roster_raw = helper_data.get("roster", []) if isinstance(helper_data, dict) else []
         roster = [str(item).strip() for item in roster_raw if str(item).strip()]
         helper = HelperConfig(automation=automation, roster=roster)
-        return cls(helper=helper)
+        developer_data = data.get("developer", {}) if isinstance(data, dict) else {}
+        passphrase_raw = developer_data.get("passphrase") if isinstance(developer_data, dict) else None
+        passphrase = str(passphrase_raw).strip() if passphrase_raw is not None else None
+        developer = DeveloperConfig(passphrase=passphrase or None)
+        return cls(helper=helper, developer=developer)
 
 
 def _candidate_paths(explicit: Optional[Path]) -> Iterable[Path]:
@@ -73,4 +89,3 @@ def reload_config(path: Optional[Path] = None) -> CentralConfig:
 
     get_runtime_config.cache_clear()  # type: ignore[attr-defined]
     return get_runtime_config() if path is None else _load_config(path)
-

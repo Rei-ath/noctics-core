@@ -1,6 +1,11 @@
 """Central version information."""
 
+from importlib import metadata
+
 __all__ = ["__version__"]
 
-__version__ = "0.0.0"
+try:  # pragma: no cover - only hit when installed as a package
+    __version__ = metadata.version("noctics-core")
+except metadata.PackageNotFoundError:  # pragma: no cover - development fallback
+    __version__ = "0.0.0"
 

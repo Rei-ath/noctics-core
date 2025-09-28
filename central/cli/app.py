@@ -22,21 +22,22 @@ except Exception:  # pragma: no cover - platform without readline
     readline = None  # type: ignore
 from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
-from .colors import color
-from .core import ChatClient, build_payload, strip_chain_of_thought
-from .runtime_identity import (
+from ..colors import color
+from ..core import ChatClient, build_payload, strip_chain_of_thought
+from ..core import clean_public_reply
+from ..runtime_identity import (
     RuntimeIdentity as _RuntimeIdentity,
     resolve_runtime_identity as _resolve_runtime_identity,
 )
 from noxl import compute_title_from_messages, load_session_messages
-from .commands.completion import setup_completions
-from .commands.helper import (
+from ..commands.completion import setup_completions
+from ..commands.helper import (
     choose_helper_interactively,
     get_helper_candidates,
     describe_helper_status,
     helper_automation_enabled,
 )
-from .commands.sessions import (
+from ..commands.sessions import (
     list_sessions as cmd_list_sessions,
     print_sessions as cmd_print_sessions,
     resolve_by_ident_or_index as cmd_resolve_by_ident_or_index,
@@ -49,225 +50,158 @@ from .commands.sessions import (
     show_session as cmd_show_session,
     browse_sessions as cmd_browse_sessions,
 )
-from .commands.help_cmd import print_help as cmd_print_help
+from ..commands.help_cmd import print_help as cmd_print_help
 from interfaces.dotenv import load_local_dotenv
 from interfaces.dev_identity import resolve_developer_identity
-from .system_info import hardware_summary
-from .version import __version__
+from ..system_info import hardware_summary
+from ..version import __version__
+from .args import DEFAULT_URL, parse_args
+from .dev import (
+    CENTRAL_DEV_PASSPHRASE_ATTEMPT_ENV,
+    require_dev_passphrase,
+    resolve_dev_passphrase,
+)
 
 RuntimeIdentity = _RuntimeIdentity
 resolve_runtime_identity = _resolve_runtime_identity
 
-__all__ = ["main", "parse_args", "RuntimeIdentity", "resolve_runtime_identity"]
+__all__ = [
+    "main",
+    "parse_args",
+    "RuntimeIdentity",
+    "resolve_runtime_identity",
+]
 
 
-DEFAULT_URL = "http://localhost:1234/v1/chat/completions"
+DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
 
 
+THINK_OPEN = "<think>"
+THINK_CLOSE = "</think>"
+THINK_OPEN_L = THINK_OPEN.lower()
+THINK_CLOSE_L = THINK_CLOSE.lower()
+THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
 
-def build_payload(
-    *,
-    model: str,
-    system_msg: Optional[str],
-    user_msg: Optional[str],
-    messages_override: Optional[List[Dict[str, Any]]],
-    temperature: float,
-    max_tokens: int,
-    stream: bool,
-) -> Dict[str, Any]:
-    """Build an OpenAI-style chat.completions payload.
 
-    If messages_override is provided, it takes precedence over system/user.
-    """
-    if messages_override is not None:
-        messages = messages_override
-    else:
-        messages: List[Dict[str, str]] = []
-        if system_msg:
-            messages.append({"role": "system", "content": system_msg})
-        if user_msg:
-            messages.append({"role": "user", "content": user_msg})
-    return {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": stream,
+def _partial_prefix_len(segment: str, token: str) -> int:
+    segment_lower = segment.lower()
+    token_lower = token.lower()
+    max_len = min(len(segment), len(token) - 1)
+    for length in range(max_len, 0, -1):
+        if segment_lower[-length:] == token_lower[:length]:
+            return length
+    return 0
+
+
+def _extract_visible_reply(text: str) -> tuple[str, bool]:
+    tokens = text.lower()
+    if THINK_OPEN_L not in tokens:
+        return text, False
+    cleaned = THINK_BLOCK_RE.sub("", text)
+    return cleaned.strip(), True
+
+
+def _make_stream_printer(show_think: bool):
+    state = {
+        "raw": "",
+        "clean": "",
+        "thinking": False,
+        "indicator_shown": False,
     }
 
-
-def _printer():
     def emit(piece: str) -> None:
-        print(piece, end="", flush=True)
-    return emit
+        if not piece:
+            return
+
+        state["raw"] += piece
+        lower_raw = state["raw"].lower()
+
+        if show_think and not state["indicator_shown"] and THINK_OPEN_L in lower_raw:
+            print(color("[thinking…]", fg="yellow", bold=True))
+            state["indicator_shown"] = True
+
+        cleaned = clean_public_reply(state["raw"]) or ""
+        if cleaned.startswith(state["clean"]):
+            delta = cleaned[len(state["clean"]):]
+        else:
+            delta = cleaned
+        if delta:
+            print(delta, end="", flush=True)
+            state["clean"] = cleaned
+
+    def finish() -> None:
+        cleaned = clean_public_reply(state["raw"]) or ""
+        if cleaned.startswith(state["clean"]):
+            delta = cleaned[len(state["clean"]):]
+        else:
+            delta = cleaned
+        if delta:
+            print(delta, end="", flush=True)
+        state["raw"] = ""
+        state["clean"] = cleaned or ""
+
+    return emit, finish
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Interactive Chat Completions CLI",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Examples:\n"
-            "  python main.py --stream\n"
-            "  python main.py --helper claude --stream\n"
-            "  python main.py --user 'Explain X' --stream\n"
-            "  python main.py --messages msgs.json --stream\n"
-            "  python main.py --sessions-ls\n"
-            "  python main.py --sessions-load session-20250913-234409\n"
-            "  python main.py --sessions-rename session-20250914-010016 'My Title'\n"
-        ),
+def request_initial_title_from_central(client: ChatClient) -> Optional[str]:
+    """Ask the active model for a concise initial session title."""
+
+    messages_for_title = list(client.messages)
+    prompt_text = (
+        "Before we begin, suggest a short friendly session title (max 6 words). "
+        "Respond with the title only."
     )
-    parser.add_argument(
-        "-U", "--url",
-        default=os.getenv("CENTRAL_LLM_URL", DEFAULT_URL),
-        help="Endpoint URL (env CENTRAL_LLM_URL)",
-    )
-    parser.add_argument(
-        "-M", "--model",
-        default=os.getenv("CENTRAL_LLM_MODEL", "qwen/qwen3-1.7b"),
-        help="Model name (env CENTRAL_LLM_MODEL)",
-    )
-    parser.add_argument(
-        "-S", "--system",
-        default=None,
-        help="System message (defaults to memory/system_prompt.txt; ignored if --messages is used)",
-    )
-    parser.add_argument("-u", "--user", default=None, help="Optional initial user message")
-    parser.add_argument(
-        "-F", "--messages",
-        dest="messages_file",
-        default=None,
-        help="Path to JSON file containing a messages array to send",
-    )
-    parser.add_argument("-t", "--temperature", type=float, default=0.7, help="Sampling temperature")
-    parser.add_argument(
-        "-T", "--max-tokens",
-        dest="max_tokens",
-        type=int,
-        default=-1,
-        help="Max tokens (-1 for unlimited if supported)",
-    )
-    parser.add_argument(
-        "-s",
-        "--stream",
-        dest="stream",
-        action="store_true",
-        default=None,
-        help="Enable streaming (SSE)",
-    )
-    parser.add_argument(
-        "--no-stream",
-        dest="stream",
-        action="store_false",
-        help="Disable streaming (skips the interactive prompt)",
-    )
-    parser.add_argument(
-        "-z", "--sanitize",
-        action="store_true",
-        help="Redact common PII from user text before sending",
-    )
-    parser.add_argument("-r", "--raw", action="store_true", help="Also print raw JSON in non-streaming mode")
-    parser.add_argument(
-        "--show-think",
-        action="store_true",
-        help="Include assistant <think> blocks in console output and session logs.",
-    )
-    parser.add_argument(
-        "-k", "--api-key",
-        default=(os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")),
-        help="Optional API key for Authorization header (env CENTRAL_LLM_API_KEY | OPENAI_API_KEY)",
-    )
-    parser.add_argument(
-        "-H", "--helper",
-        default=None,
-        help=(
-            "Optional helper name label used when Central requests a helper; "
-            "does not skip API calls."
-        ),
-    )
-    parser.add_argument(
-        "-L", "--sessions-ls",
-        dest="sessions_ls",
-        action="store_true",
-        help="List saved sessions with titles and exit",
-    )
-    parser.add_argument(
-        "-D", "--sessions-load",
-        metavar="ID_OR_PATH",
-        default=None,
-        help="Load a session's messages before starting chat (by id or path)",
-    )
-    parser.add_argument(
-        "-R", "--sessions-rename",
-        nargs=2,
-        metavar=("ID_OR_PATH", "NEW_TITLE"),
-        default=None,
-        help="Rename (retitle) a saved session and exit",
-    )
-    parser.add_argument(
-        "-G", "--sessions-merge",
-        nargs="+",
-        metavar="ID_OR_INDEX",
-        default=None,
-        help="Merge sessions (ids or indices) into a new merged folder and exit",
-    )
-    parser.add_argument(
-        "-E", "--sessions-latest",
-        dest="sessions_latest",
-        action="store_true",
-        help="Show the most recently updated session and exit",
-    )
-    parser.add_argument(
-        "-A", "--sessions-archive-early",
-        dest="sessions_archive_early",
-        action="store_true",
-        help="Merge all but the latest session into memory/early-archives and exit",
-    )
-    parser.add_argument(
-        "-B", "--sessions-browse",
-        dest="sessions_browse",
-        action="store_true",
-        help="Interactively browse saved sessions and view their contents",
-    )
-    parser.add_argument(
-        "-P", "--sessions-show",
-        metavar="ID_OR_PATH",
-        dest="sessions_show",
-        default=None,
-        help="Pretty-print the contents of a saved session and exit",
-    )
-    parser.add_argument(
-        "--user-name",
-        dest="user_name",
-        default=os.getenv("CENTRAL_USER_NAME", "You"),
-        help="Name to display for your prompt label (env CENTRAL_USER_NAME)",
-    )
-    parser.add_argument(
-        "--dev",
-        action="store_true",
-        help="Run as the project developer (skip user onboarding and log as developer)",
-    )
-    # Helper anonymization toggle (default on unless CENTRAL_HELPER_ANON=0/false)
-    default_anon = (os.getenv("CENTRAL_HELPER_ANON", "1").lower() not in {"0", "false", "off", "no"})
-    parser.add_argument(
-        "--anon-helper",
-        dest="anon_helper",
-        action="store_true",
-        default=default_anon,
-        help="Reserved sanitization toggle for future helper integration",
-    )
-    parser.add_argument(
-        "--no-anon-helper",
-        dest="anon_helper",
-        action="store_false",
-        help="Disable the reserved helper sanitization toggle",
-    )
-    parser.add_argument(
-        "--version",
-        action="store_true",
-        help="Print the Central version and exit",
-    )
-    return parser.parse_args(argv)
+    messages_for_title.append({"role": "user", "content": prompt_text})
+    try:
+        reply, _ = client.transport.send(
+            build_payload(
+                model=client.model,
+                messages=messages_for_title,
+                temperature=0.0,
+                max_tokens=32 if client.max_tokens == -1 else min(client.max_tokens, 64),
+                stream=False,
+            ),
+            stream=False,
+        )
+    except Exception:
+        return None
+    if not reply:
+        return None
+    reply = strip_chain_of_thought(reply)
+    title = reply.strip().strip('"')
+    return title[:80] if title else None
+
+
+def select_session_interactively(
+    items: List[Dict[str, Any]], *, show_transcript: bool = False
+) -> tuple[Optional[List[Dict[str, Any]]], Optional[Path]]:
+    """Prompt the operator to choose a saved session, returning messages and path."""
+
+    if not items:
+        return None, None
+    print(color("Saved sessions:", fg="yellow", bold=True))
+    cmd_print_sessions(items)
+    while True:
+        try:
+            choice = input(color("Select session number or id (Enter for new): ", fg="yellow")).strip()
+        except EOFError:
+            return None, None
+        if not choice:
+            return None, None
+        path = cmd_resolve_by_ident_or_index(choice, items)
+        if not path:
+            print(color("No session found for that selection.", fg="red"))
+            continue
+        loaded = load_session_messages(path)
+        if not loaded:
+            print(color("Session is empty or unreadable.", fg="red"))
+            continue
+        print(color(f"Loaded session: {path.stem}", fg="yellow"))
+        if show_transcript:
+            print()
+            cmd_show_session(path.as_posix())
+        return loaded, path
+
 
 
 def main(argv: List[str]) -> int:
@@ -275,6 +209,13 @@ def main(argv: List[str]) -> int:
     load_local_dotenv(Path(__file__).resolve().parent)
 
     args = parse_args(argv)
+
+    if getattr(args, "dev", False):
+        dev_passphrase = resolve_dev_passphrase()
+        interactive = sys.stdin.isatty() and os.getenv(CENTRAL_DEV_PASSPHRASE_ATTEMPT_ENV) is None
+        if not require_dev_passphrase(dev_passphrase, interactive=interactive):
+            print(color("Developer mode locked.", fg="red", bold=True))
+            return 1
 
     if getattr(args, "version", False):
         print(__version__)
@@ -308,10 +249,12 @@ def main(argv: List[str]) -> int:
                 )
 
     helper_status_line = describe_helper_status()
+    helper_auto_on = helper_automation_enabled()
     if interactive:
         print(color(f"Helpers: {helper_status_line}", fg="yellow"))
     hardware_info = hardware_summary()
     hardware_line = f"Hardware context: {hardware_info}"
+    helper_auto_line = f"Helper automation: {'ON' if helper_auto_on else 'OFF'}"
 
     if args.stream is None:
         if interactive:
@@ -377,55 +320,6 @@ def main(argv: List[str]) -> int:
     sessions_snapshot = cmd_list_sessions()
     first_run_global = not sessions_snapshot
 
-    def request_initial_title_from_central(client: ChatClient) -> Optional[str]:
-        messages_for_title = list(client.messages)
-        prompt_text = (
-            "Before we begin, suggest a short friendly session title (max 6 words). "
-            "Respond with the title only."
-        )
-        messages_for_title.append({"role": "user", "content": prompt_text})
-        try:
-            reply, _ = client.transport.send(
-                build_payload(
-                    model=client.model,
-                    messages=messages_for_title,
-                    temperature=0.0,
-                    max_tokens=32 if client.max_tokens == -1 else min(client.max_tokens, 64),
-                    stream=False,
-                ),
-                stream=False,
-            )
-        except Exception:
-            return None
-        if not reply:
-            return None
-        reply = strip_chain_of_thought(reply)
-        title = reply.strip().strip('"')
-        return title[:80] if title else None
-
-    def select_session_interactively(items: List[Dict[str, Any]]) -> tuple[Optional[List[Dict[str, Any]]], Optional[Path]]:
-        if not items:
-            return None, None
-        print(color("Saved sessions:", fg="yellow", bold=True))
-        cmd_print_sessions(items)
-        while True:
-            try:
-                choice = input(color("Select session number or id (Enter for new): ", fg="yellow")).strip()
-            except EOFError:
-                return None, None
-            if not choice:
-                return None, None
-            path = cmd_resolve_by_ident_or_index(choice, items)
-            if not path:
-                print(color("No session found for that selection.", fg="red"))
-                continue
-            loaded = load_session_messages(path)
-            if not loaded:
-                print(color("Session is empty or unreadable.", fg="red"))
-                continue
-            print(color(f"Loaded session: {path.stem}", fg="yellow"))
-            return loaded, path
-
     # Load default system prompt from file if not provided
     if args.system is None and not args.messages_file:
         local_path = Path("memory/system_prompt.local.txt")
@@ -467,7 +361,10 @@ def main(argv: List[str]) -> int:
             session_path_to_adopt = path
             print(color(f"Loaded session: {path.stem}", fg="yellow"))
         elif interactive and not args.messages_file:
-            loaded_messages, chosen_path = select_session_interactively(sessions_snapshot)
+            loaded_messages, chosen_path = select_session_interactively(
+                sessions_snapshot,
+                show_transcript=bool(getattr(args, "dev", False)),
+            )
             if loaded_messages is not None:
                 messages = loaded_messages
                 session_path_to_adopt = chosen_path
@@ -541,6 +438,31 @@ def main(argv: List[str]) -> int:
                 args.system = (content + ("\n\n" if content else "") + hardware_line).strip()
         else:
             args.system = hardware_line
+    # Expose helper automation status to Central as part of the system preamble
+    helper_status_inserted = False
+    for msg in messages:
+        if isinstance(msg, dict) and msg.get("role") == "system" and helper_auto_line in str(msg.get("content") or ""):
+            helper_status_inserted = True
+            break
+    if not helper_status_inserted:
+        inserted = False
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if isinstance(msg, dict) and msg.get("role") == "system":
+                content = str(msg.get("content") or "").strip()
+                content = (content + ("\n\n" if content else "") + helper_auto_line).strip()
+                messages[i]["content"] = content
+                inserted = True
+                break
+        if not inserted:
+            messages.insert(0, {"role": "system", "content": helper_auto_line})
+        if args.system:
+            content = args.system.strip()
+            if helper_auto_line not in content:
+                args.system = (content + ("\n\n" if content else "") + helper_auto_line).strip()
+        else:
+            args.system = helper_auto_line
+
     user_line = f"User handle: {args.user_name}"
     user_inserted = False
     for msg in messages:
@@ -754,22 +676,27 @@ def main(argv: List[str]) -> int:
     def notify_helper_needed() -> None:
         status_line = describe_helper_status()
         message = f"Central requested an external helper. {status_line}"
-        if helper_automation_enabled():
+        if helper_auto_on:
             message += " Central will attempt to call the configured helper automatically when available."
         else:
             if not args.helper and sys.stdin.isatty():
                 chosen = choose_helper_interactively(args.helper)
                 if chosen:
                     args.helper = chosen
-            message += " Helper automation is unavailable in this build, so the request could not be sent."
+            message += " Helper automation is unavailable, so helpers cannot be reached right now. Central must respond with a local fallback."
         print(color(message, fg="yellow"))
 
     def one_turn(user_text: str) -> Optional[str]:
         # Normal API mode via core client
+        show_think = bool(args.show_think)
+        if show_think:
+            print(color("[processing…]", fg="yellow", bold=True), flush=True)
         if args.stream:
+            stream_emit, stream_finish = _make_stream_printer(show_think)
             try:
-                assistant = client.one_turn(user_text, on_delta=_printer())
+                assistant = client.one_turn(user_text, on_delta=stream_emit)
             except Exception as e:
+                stream_finish()
                 print()
                 print(color("Request failed:", fg="red", bold=True))
                 print(color(f"{e}", fg="red"))
@@ -780,6 +707,7 @@ def main(argv: List[str]) -> int:
                     )
                 )
                 return None
+            stream_finish()
             print()
             if assistant is not None and ChatClient.wants_helper(assistant):
                 notify_helper_needed()
@@ -805,7 +733,15 @@ def main(argv: List[str]) -> int:
                 handle_dev_shell_commands(assistant)
                 assistant = handle_title_change(assistant)
                 if assistant:
-                    print(assistant)
+                    display_text = assistant
+                    if show_think:
+                        display_text, had_think = _extract_visible_reply(display_text)
+                        if had_think:
+                            print(color("[thinking…]", fg="yellow", bold=True))
+                    else:
+                        had_think = False
+                    if display_text:
+                        print(display_text)
             return assistant
 
     # Non-interactive one-shot if stdin is piped and no --user provided
@@ -982,6 +918,13 @@ def main(argv: List[str]) -> int:
                 path_for_adopt = p if p else (Path(ident) if Path(ident).exists() else None)
                 if path_for_adopt is not None:
                     adopt_session(path_for_adopt)
+                    if getattr(args, "dev", False):
+                        print()
+                        cmd_show_session(path_for_adopt.as_posix())
+                else:
+                    if getattr(args, "dev", False):
+                        print()
+                        cmd_show_session(ident)
                 continue
 
             if prompt.strip() == "/load":
@@ -1010,6 +953,13 @@ def main(argv: List[str]) -> int:
                 path_for_adopt = p if p else (Path(selection) if Path(selection).exists() else None)
                 if path_for_adopt is not None:
                     adopt_session(path_for_adopt)
+                    if getattr(args, "dev", False):
+                        print()
+                        cmd_show_session(path_for_adopt.as_posix())
+                else:
+                    if getattr(args, "dev", False):
+                        print()
+                        cmd_show_session(selection)
                 continue
 
             if prompt.startswith("/merge "):

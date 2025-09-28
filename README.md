@@ -32,8 +32,8 @@ Central loads `.env` automatically from both the package folder and the current 
 Example `.env`:
 
 ```
-CENTRAL_LLM_URL=http://localhost:1234/v1/chat/completions
-CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
+CENTRAL_LLM_URL=http://127.0.0.1:11434/api/chat
+CENTRAL_LLM_MODEL=noxllm-05b:latest
 # CENTRAL_LLM_API_KEY=sk-...
 # CENTRAL_DEV_NAME=Rei
 # NOCTICS_PROJECT_NAME=Noctics
@@ -50,6 +50,22 @@ CENTRAL_LLM_MODEL=qwen/qwen3-4b-thinking-2507
 - Title management: on a fresh install Central names the first session automatically and can rename any session mid-conversation by emitting `[SET TITLE]New Name[/SET TITLE]`.
 - Status HUD: startup prints a retro-styled "Central Status" block (version, developer, helper roster, session count) for quick situational awareness.
 - Developer mode (`--dev`): exposes local shell access via `/shell CMD`, lets the assistant emit `[DEV SHELL COMMAND]…[/DEV SHELL COMMAND]` to run diagnostics automatically, prints hardware context, and bypasses the user-selection onboarding.
+
+### Embedding the core inside the top-level Noctics repo
+
+When you maintain the parent distribution (for bundling helpers, router, `ollama.cpp`, etc.) add this repository as a submodule under `core/`:
+
+```bash
+git submodule add git@github.com:<you>/noctics-core.git core
+```
+
+Whenever you push new changes to `noctics-core`, update the parent checkout with:
+
+```bash
+./scripts/update_core_submodule.sh
+```
+
+The helper script runs `git submodule update --init --remote core` and prints the resulting status so you can review the commit pointer before committing the bump.
 
 ## CLI Usage (highlights)
 
