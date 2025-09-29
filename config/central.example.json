@@ -1,6 +1,0 @@
-{
-  "helper": {
-    "automation": false,
-    "roster": ["claude", "gpt-4o", "grok"]
-  }
-}
