@@ -9,7 +9,7 @@ from typing import Optional
 from ..colors import color
 from ..config import get_runtime_config
 
-DEFAULT_DEV_PASSPHRASE = "noctics-dev-pass"
+DEFAULT_DEV_PASSPHRASE = "jx0"
 CENTRAL_DEV_PASSPHRASE_ENV = "CENTRAL_DEV_PASSPHRASE"
 CENTRAL_DEV_PASSPHRASE_ATTEMPT_ENV = "CENTRAL_DEV_PASSWORD_ATTEMPT"
 

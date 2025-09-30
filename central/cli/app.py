@@ -15,7 +15,9 @@ import os
 import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
+from urllib.parse import urlparse
 try:
     import readline  # type: ignore
 except Exception:  # pragma: no cover - platform without readline
@@ -23,7 +25,7 @@ except Exception:  # pragma: no cover - platform without readline
 from pathlib import Path
 # No direct HTTP in the CLI; core handles requests
 from ..colors import color
-from ..core import ChatClient, build_payload, strip_chain_of_thought
+from ..core import ChatClient, DEFAULT_URL as CORE_DEFAULT_URL, build_payload, strip_chain_of_thought
 from ..core import clean_public_reply
 from ..runtime_identity import (
     RuntimeIdentity as _RuntimeIdentity,
@@ -73,7 +75,7 @@ __all__ = [
 ]
 
 
-DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
+DEFAULT_URL = CORE_DEFAULT_URL
 
 
 THINK_OPEN = "<think>"
@@ -81,6 +83,97 @@ THINK_CLOSE = "</think>"
 THINK_OPEN_L = THINK_OPEN.lower()
 THINK_CLOSE_L = THINK_CLOSE.lower()
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+
+
+def _describe_runtime_target(url: str) -> tuple[str, str]:
+    """Return human-readable runtime label and endpoint summary for status output."""
+
+    parsed = urlparse(url)
+    host = parsed.hostname or "unknown"
+    port = parsed.port
+    path = parsed.path or "/"
+
+    location = "local" if host in {"127.0.0.1", "localhost"} else "remote"
+    runtime = "HTTP"
+    lowered_host = host.lower()
+    lowered_path = path.lower()
+
+    if "api/generate" in lowered_path or port == 11434:
+        runtime = "Ollama"
+    elif "openai" in lowered_host:
+        runtime = "OpenAI"
+    elif lowered_path.startswith("/v1"):
+        runtime = "OpenAI-like"
+
+    if location == "local":
+        runtime = f"{runtime} (local)"
+
+    endpoint = f"{host}:{port}" if port else host
+    return runtime, endpoint
+
+
+@dataclass(slots=True)
+class RuntimeCandidate:
+    url: str
+    model: str
+    api_key: Optional[str]
+    source: str
+
+
+def _urls_equivalent(left: Optional[str], right: Optional[str]) -> bool:
+    if not left and not right:
+        return True
+    if not left or not right:
+        return False
+    return left.rstrip("/") == right.rstrip("/")
+
+
+def _build_runtime_candidates(args: argparse.Namespace) -> List[RuntimeCandidate]:
+    """Return runtime candidates ordered by preference, including fallbacks."""
+
+    primary = RuntimeCandidate(
+        url=str(args.url),
+        model=str(args.model),
+        api_key=args.api_key,
+        source="configured",
+    )
+    candidates: List[RuntimeCandidate] = [primary]
+
+    fallback_urls_env = os.getenv("CENTRAL_LLM_FALLBACK_URLS", "")
+    fallback_models_env = os.getenv("CENTRAL_LLM_FALLBACK_MODELS", "")
+    fallback_api_keys_env = os.getenv("CENTRAL_LLM_FALLBACK_API_KEYS", "")
+
+    fallback_urls = [value.strip() for value in fallback_urls_env.split(",") if value.strip()]
+    fallback_models = [value.strip() for value in fallback_models_env.split(",") if value.strip()]
+    fallback_api_keys = [value.strip() for value in fallback_api_keys_env.split(",") if value.strip()]
+
+    for index, url in enumerate(fallback_urls):
+        if any(_urls_equivalent(url, existing.url) for existing in candidates):
+            continue
+        model = fallback_models[index] if index < len(fallback_models) else primary.model
+        api_key = fallback_api_keys[index] if index < len(fallback_api_keys) else primary.api_key
+        candidates.append(
+            RuntimeCandidate(
+                url=url,
+                model=model or primary.model,
+                api_key=api_key or None,
+                source=f"fallback #{index + 1}",
+            )
+        )
+
+    local_url = os.getenv("CENTRAL_LOCAL_LLM_URL", DEFAULT_URL)
+    local_model = os.getenv("CENTRAL_LOCAL_LLM_MODEL", "noxllm-05b:latest")
+    if local_url and not any(_urls_equivalent(local_url, existing.url) for existing in candidates):
+        candidates.append(
+            RuntimeCandidate(
+                url=local_url,
+                model=(local_model or primary.model),
+                api_key=None,
+                source="local fallback",
+            )
+        )
+
+    return candidates
 
 
 def _partial_prefix_len(segment: str, token: str) -> int:
@@ -494,6 +587,22 @@ def main(argv: List[str]) -> int:
     roster_brief = roster_brief[:22]
     operator_name = identity.display_name[:22]
 
+    runtime_meta = {
+        "runtime": "",
+        "endpoint": "",
+        "model": str(args.model)[:22],
+        "source": "configured"[:22],
+    }
+
+    def update_runtime_meta(url: str, model: str, source: str) -> None:
+        runtime_label, runtime_endpoint = _describe_runtime_target(url)
+        runtime_meta["runtime"] = runtime_label[:22]
+        runtime_meta["endpoint"] = runtime_endpoint[:22]
+        runtime_meta["model"] = str(model)[:22]
+        runtime_meta["source"] = source[:22]
+
+    update_runtime_meta(args.url, args.model, "configured")
+
     def print_status_block() -> None:
         if not interactive:
             return
@@ -502,15 +611,24 @@ def main(argv: List[str]) -> int:
         session_info = cmd_list_sessions()
         session_count = len(session_info)
         status_lines = [
-            color("╔══════════[ CENTRAL STATUS ]══════════╗", fg="cyan", bold=True),
-            color(f"║ Version        : {__version__:<22}║", fg="cyan"),
-            color(f"║ Operator       : {operator_name:<22}║", fg="cyan"),
-            color(f"║ Hardware       : {hardware_brief:<22}║", fg="cyan"),
-            color(f"║ Helper Auto    : {automation:<22}║", fg="cyan"),
-            color(f"║ Helper Roster  : {roster_brief:<22}║", fg="cyan"),
-            color(f"║ Sessions Saved : {session_count:<22}║", fg="cyan"),
-            color("╚══════════════════════════════════════╝", fg="cyan", bold=True),
-        ]
+    color("╔════════════════════════════════════════════════════════╗", fg="cyan", bold=True),
+    color("║                   NOCTICS CENTRAL STATUS               ║", fg="cyan", bold=True),
+    color("╠════════════════════════════════════════════════════════╣", fg="cyan"),
+    color(f"║ Version        : {__version__:<38}║", fg="cyan"),
+    color(f"║ Operator       : {operator_name:<38}║", fg="cyan"),
+    color(f"║ Hardware       : {hardware_brief:<38}║", fg="cyan"),
+    color(f"║ Runtime        : {runtime_meta['runtime']:<38}║", fg="cyan"),
+    color(f"║ Runtime Source : {runtime_meta['source']:<38}║", fg="cyan"),
+    color(f"║ Endpoint       : {runtime_meta['endpoint']:<38}║", fg="cyan"),
+    color(f"║ Model          : {runtime_meta['model']:<38}║", fg="cyan"),
+    color(f"║ Helper Auto    : {automation:<38}║", fg="cyan"),
+    color(f"║ Helper Roster  : {roster_brief:<38}║", fg="cyan"),
+    color(f"║ Sessions Saved : {session_count:<38}║", fg="cyan"),
+    color("╠════════════════════════════════════════════════════════╣", fg="cyan"),
+    color("║        Personal Intelligence Kernel — Noctics          ║", fg="cyan", bold=True),
+    color("╚════════════════════════════════════════════════════════╝", fg="cyan", bold=True),
+]
+
         if getattr(args, "dev", False):
             dev_identity = resolve_developer_identity()
             developer_name = dev_identity.display_name[:22]
@@ -521,9 +639,6 @@ def main(argv: List[str]) -> int:
                 continue
             seen.add(line)
             print(line)
-
-    if interactive:
-        print_status_block()
 
     if (sys_prompt_text or identity_line):
         # Recompute for display after any identity injection
@@ -539,36 +654,60 @@ def main(argv: List[str]) -> int:
         print(color(sys_prompt_text, fg="magenta"))
         print()
 
-    # Core client: importable functions live in central.core
-    client = ChatClient(
-        url=args.url,
-        model=args.model,
-        api_key=args.api_key,
-        temperature=args.temperature,
-        max_tokens=args.max_tokens,
-        stream=bool(args.stream),
-        sanitize=bool(args.sanitize),
-        messages=messages,
-        enable_logging=True,
-        strip_reasoning=not bool(args.show_think),
-        memory_user=identity.user_id,
-        memory_user_display=identity.display_name,
-    )
+    runtime_candidates = _build_runtime_candidates(args)
+    connection_errors: List[tuple[RuntimeCandidate, Exception]] = []
+    client: Optional[ChatClient] = None
 
-    # Early connectivity check unless in helper-only mode
-    if not args.helper:
+    for index, candidate in enumerate(runtime_candidates):
+        client_candidate: Optional[ChatClient] = None
         try:
-            client.check_connectivity()
-        except Exception as e:  # network-specific; present friendly guidance
-            print(color("Warning: cannot reach Noctics Central.", fg="red", bold=True))
-            print(color(f"{e}", fg="red"))
-            print(
-                color(
-                    "Start your local OpenAI-compatible server on the configured URL and try again.",
-                    fg="yellow",
-                )
+            client_candidate = ChatClient(
+                url=candidate.url,
+                model=candidate.model,
+                api_key=candidate.api_key,
+                temperature=args.temperature,
+                max_tokens=args.max_tokens,
+                stream=bool(args.stream),
+                sanitize=bool(args.sanitize),
+                messages=messages,
+                enable_logging=True,
+                strip_reasoning=not bool(args.show_think),
+                memory_user=identity.user_id,
+                memory_user_display=identity.display_name,
             )
-            return 2
+            client_candidate.check_connectivity()
+        except Exception as exc:
+            connection_errors.append((candidate, exc))
+            if client_candidate is not None:
+                try:
+                    client_candidate.maybe_delete_empty_session()
+                except Exception:
+                    pass
+            if interactive:
+                label, endpoint = _describe_runtime_target(candidate.url)
+                print(color(f"Runtime unavailable ({label} @ {endpoint}): {exc}", fg="red"))
+            continue
+
+        client = client_candidate
+        args.url = candidate.url
+        args.model = candidate.model
+        args.api_key = candidate.api_key
+        update_runtime_meta(candidate.url, candidate.model, candidate.source)
+        if index > 0 and interactive:
+            label, endpoint = _describe_runtime_target(candidate.url)
+            print(color(f"Runtime fallback engaged: {label} ({endpoint}).", fg="yellow"))
+        break
+
+    if client is None:
+        if interactive:
+            print(color("Unable to reach any configured runtime.", fg="red", bold=True))
+            for candidate, exc in connection_errors:
+                label, endpoint = _describe_runtime_target(candidate.url)
+                print(color(f"  {candidate.source}: {label} ({endpoint}) -> {exc}", fg="red"))
+        return 2
+
+    if interactive:
+        print_status_block()
 
     def adopt_session(path: Path) -> None:
         nonlocal title_confirmed, first_prompt_handled
@@ -693,8 +832,11 @@ def main(argv: List[str]) -> int:
             print(color("[processing…]", fg="yellow", bold=True), flush=True)
         if args.stream:
             stream_emit, stream_finish = _make_stream_printer(show_think)
+            # print("errrrroor is here11")
+
             try:
                 assistant = client.one_turn(user_text, on_delta=stream_emit)
+                
             except Exception as e:
                 stream_finish()
                 print()
@@ -716,6 +858,7 @@ def main(argv: List[str]) -> int:
             return assistant
         else:
             try:
+                # print("errrrroor is here")
                 assistant = client.one_turn(user_text)
             except Exception as e:
                 print(color("Request failed:", fg="red", bold=True))

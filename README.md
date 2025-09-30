@@ -6,10 +6,12 @@ Local, privacy-first chat orchestration with helper-aware streaming and session 
 
 ## Quick Start
 
-- Create env (Python 3.13 recommended):
+- Bootstrap everything (creates `.venv`, installs deps, seeds config):
+  - `python scripts/bootstrap.py`
+- Prefer manual setup? Create env (Python 3.13 recommended):
   - `python -m venv jenv && source jenv/bin/activate`
 - Configure `.env` (optional; auto-loaded):
-  - Copy `.env.example` to `.env` and adjust values
+  - Create `.env` and adjust values (`scripts/bootstrap.py` seeds defaults)
 - Run the CLI:
   - `python main.py`
 - Check the bundled version:
