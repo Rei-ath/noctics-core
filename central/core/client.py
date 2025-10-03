@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -89,6 +90,53 @@ class ChatClient:
         )
         if self.logger:
             self.logger.start()
+
+    # -----------------
+    # Payload adapters
+    # -----------------
+    def _prepare_payload(self, payload: Dict[str, Any], *, stream: bool) -> Dict[str, Any]:
+        """Normalize payload details for specific providers."""
+
+        target_url = (self.url or "").lower()
+        if "openai.com" not in target_url:
+            return payload
+
+        adjusted: Dict[str, Any] = dict(payload)
+
+        messages = adjusted.get("messages")
+        if isinstance(messages, list):
+            converted: List[Dict[str, Any]] = []
+            for message in messages:
+                if not isinstance(message, dict):
+                    continue
+                rewritten = dict(message)
+                content = rewritten.get("content")
+                if isinstance(content, str):
+                    rewritten["content"] = [{"type": "text", "text": content}]
+                elif isinstance(content, list):
+                    rewritten["content"] = deepcopy(content)
+                elif content is not None:
+                    rewritten["content"] = [{"type": "text", "text": str(content)}]
+                converted.append(rewritten)
+            adjusted["messages"] = converted
+
+        if self.temperature is not None:
+            adjusted.setdefault("temperature", self.temperature)
+
+        if self.max_tokens and self.max_tokens > 0:
+            adjusted.setdefault("max_tokens", self.max_tokens)
+            adjusted.setdefault("max_completion_tokens", self.max_tokens)
+
+        model_name = str(self.model)
+        if model_name.startswith(("gpt-4.1", "gpt-5", "gpt-4o", "o1")):
+            adjusted.setdefault("modalities", ["text"])
+            adjusted.setdefault("response_format", {"type": "text"})
+
+        if stream:
+            adjusted["stream"] = True
+            adjusted.setdefault("stream_options", {"include_usage": False})
+
+        return adjusted
 
     # ---------------------
     # Connectivity / health
@@ -178,6 +226,7 @@ class ChatClient:
             max_tokens=self.max_tokens,
             stream=bool(self.stream),
         )
+        payload = self._prepare_payload(payload, stream=bool(self.stream))
 
         public_state: Dict[str, Any] = {}
         if self.stream:
@@ -245,7 +294,7 @@ class ChatClient:
     ) -> Optional[str]:
         if not helper_text:
             return None
-        helper_wrapped = f"[HELPER RESULT]\n{helper_text}\n[/HELPER RESULT]"
+        helper_wrapped = f"[INSTRUMENT RESULT]\n{helper_text}\n[/INSTRUMENT RESULT]"
         helper_messages = list(self.messages)
         helper_messages.append({"role": "system", "content": load_helper_prompt()})
         helper_messages.append({"role": "user", "content": helper_wrapped})
@@ -256,6 +305,7 @@ class ChatClient:
             max_tokens=self.max_tokens,
             stream=bool(self.stream),
         )
+        payload = self._prepare_payload(payload, stream=bool(self.stream))
 
         if self.stream:
             reply, _ = self.transport.send(payload, stream=True, on_chunk=on_delta)

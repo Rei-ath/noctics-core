@@ -32,11 +32,30 @@ def load_dotenv_files(paths: Iterable[Path]) -> None:
 
 
 def load_local_dotenv(here: Path | None = None) -> None:
-    """Load .env from the package folder and current working directory.
+    """Load .env from the package folder and nearby working directories.
 
     Does not overwrite existing environment variables.
     """
     if here is None:
         here = Path(__file__).resolve().parent
-    load_dotenv_files([here / ".env", Path.cwd() / ".env"]) 
+    candidates: list[Path] = [here / ".env", Path.cwd() / ".env"]
+
+    # Also check a few ancestor directories (e.g., repo root when running from core/).
+    for parent in list(here.parents)[:3]:
+        candidates.append(parent / ".env")
+
+    unique_candidates: list[Path] = []
+    seen: set[str] = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except Exception:
+            resolved = path
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(path)
+
+    load_dotenv_files(unique_candidates)
 

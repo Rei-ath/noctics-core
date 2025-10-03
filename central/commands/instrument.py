@@ -9,27 +9,27 @@ from central.config import get_runtime_config
 from interfaces.pii import sanitize as pii_sanitize
 
 # -----------------------------
-# Helper query anonymization
+# Instrument query anonymization
 # -----------------------------
 
-_HELPER_QUERY_RE = re.compile(r"\[HELPER\s+QUERY\](.*?)\[/HELPER\s+QUERY\]", re.IGNORECASE | re.DOTALL)
+_INSTRUMENT_QUERY_RE = re.compile(r"\[(?:HELPER|INSTRUMENT)\s+QUERY\](.*?)\[/(?:HELPER|INSTRUMENT)\s+QUERY\]", re.IGNORECASE | re.DOTALL)
 
 
-def extract_helper_query(text: str) -> Optional[str]:
-    """Extract the content of a [HELPER QUERY]...[/HELPER QUERY] block.
+def extract_instrument_query(text: str) -> Optional[str]:
+    """Extract the content of a [INSTRUMENT QUERY]... block (helper fallback).
 
     Returns None if no block is present.
     """
     if not text:
         return None
-    m = _HELPER_QUERY_RE.search(text)
+    m = _INSTRUMENT_QUERY_RE.search(text)
     if not m:
         return None
     return m.group(1).strip()
 
 
-def anonymize_for_helper(text: str, *, user_name: Optional[str] = None) -> str:
-    """Sanitize a helper query to avoid leaking user identity.
+def anonymize_for_instrument(text: str, *, user_name: Optional[str] = None) -> str:
+    """Sanitize an instrument query to avoid leaking user identity.
 
     - Applies PII redaction (emails, phones, cards via Luhn-like, IPv4).
     - Optionally redacts configured names from env `CENTRAL_REDACT_NAMES` (comma-separated).
@@ -51,27 +51,32 @@ def anonymize_for_helper(text: str, *, user_name: Optional[str] = None) -> str:
     return out
 
 
-def print_sanitized_helper_query(block: str, *, user_name: Optional[str]) -> None:
-    """Utility to display a sanitized helper query block."""
+def print_sanitized_instrument_query(block: str, *, user_name: Optional[str]) -> None:
+    """Utility to display a sanitized instrument query block."""
     print()
-    print(color("Helper Query (sanitized):", fg="blue", bold=True))
-    print(anonymize_for_helper(block, user_name=user_name))
+    print(color("Instrument Query (sanitized):", fg="blue", bold=True))
+    print(anonymize_for_instrument(block, user_name=user_name))
 
 
 # -----------------------------
-# Helper selection utilities
+# Instrument selection utilities
 # -----------------------------
 
-def get_helper_candidates() -> List[str]:
-    """Return a list of helper names from env, config, or defaults."""
+def get_instrument_candidates() -> List[str]:
+    """Return a list of instrument names from env, config, or defaults."""
 
-    env_helpers = [s.strip() for s in (os.getenv("CENTRAL_HELPERS") or "").split(",") if s.strip()]
-    if env_helpers:
-        return env_helpers
+    env_instruments = [
+        s.strip()
+        for s in (os.getenv("CENTRAL_INSTRUMENTS") or os.getenv("CENTRAL_HELPERS") or "").split(",")
+        if s.strip()
+    ]
+    if env_instruments:
+        return env_instruments
 
-    config_helpers = get_runtime_config().helper.roster
-    if config_helpers:
-        return config_helpers
+    cfg = get_runtime_config().instrument
+    config_instruments = cfg.roster
+    if config_instruments:
+        return config_instruments
 
     # Popular LLM/provider names as convenient defaults; override via env/config
     return [
@@ -87,32 +92,32 @@ def get_helper_candidates() -> List[str]:
     ]
 
 
-def helper_automation_enabled() -> bool:
-    """Return True if automatic helper stitching is available."""
+def instrument_automation_enabled() -> bool:
+    """Return True if automatic instrument stitching is available."""
 
-    value = os.getenv("CENTRAL_HELPER_AUTOMATION", "").strip()
+    value = os.getenv("CENTRAL_INSTRUMENT_AUTOMATION", "").strip() or os.getenv("CENTRAL_HELPER_AUTOMATION", "").strip()
     if value:
         return value.lower() in {"1", "true", "on", "yes"}
-    return get_runtime_config().helper.automation
+    return get_runtime_config().instrument.automation
 
 
-def describe_helper_status() -> str:
-    """Return a concise description of helper availability."""
+def describe_instrument_status() -> str:
+    """Return a concise description of instrument availability."""
 
-    helpers = get_helper_candidates()
-    roster = ", ".join(helpers) if helpers else "none configured"
-    if helper_automation_enabled():
-        return f"Automation enabled. Available helpers: {roster}."
+    instruments = get_instrument_candidates()
+    roster = ", ".join(instruments) if instruments else "none configured"
+    if instrument_automation_enabled():
+        return f"Automation enabled. Available instruments: {roster}."
     return (
-        "Automation disabled. Available helper labels: "
-        f"{roster}. Install the full Noctics suite (with the router service) to enable automatic helper routing."
+        "Automation disabled. Available instrument labels: "
+        f"{roster}. Install the full Noctics suite (with the router service) to enable automatic instrument routing."
     )
 
 
-def choose_helper_interactively(current: Optional[str] = None) -> Optional[str]:
-    """Prompt the user to choose a helper if none is set.
+def choose_instrument_interactively(current: Optional[str] = None) -> Optional[str]:
+    """Prompt the user to choose an instrument if none is set.
 
-    - Returns the chosen helper name (or None if skipped).
+    - Returns the chosen instrument name (or None if skipped).
     - Accepts a number (index) or a free-form name.
     - If stdin is not interactive, returns current unchanged.
     """
@@ -124,12 +129,12 @@ def choose_helper_interactively(current: Optional[str] = None) -> Optional[str]:
     except Exception:
         return current
 
-    candidates = get_helper_candidates()
-    print(color("Choose a helper:", fg="yellow", bold=True))
+    candidates = get_instrument_candidates()
+    print(color("Choose an instrument:", fg="yellow", bold=True))
     print(color("(press Enter to skip; type a number or name)", fg="yellow"))
     for i, h in enumerate(candidates, 1):
         print(f"  {i}. {h}")
-    print(color("helper>", fg="blue", bold=True) + " ", end="", flush=True)
+    print(color("instrument>", fg="blue", bold=True) + " ", end="", flush=True)
     try:
         choice = input().strip()
     except EOFError:
