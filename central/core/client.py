@@ -7,7 +7,7 @@ import socket
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from urllib.error import URLError
 from urllib.parse import urlparse
 
@@ -25,6 +25,14 @@ from ..connector import CentralConnector, build_connector
 from .helper_prompt import load_helper_prompt
 from .payloads import build_payload
 from .reasoning import clean_public_reply, extract_public_segments, strip_chain_of_thought
+
+try:  # instruments package lives in the superproject
+    from instruments import build_instrument as _build_instrument
+except Exception:  # pragma: no cover - optional dependency
+    _build_instrument = None
+
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from instruments.base import BaseInstrument
 
 DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
 
@@ -91,11 +99,28 @@ class ChatClient:
         if self.logger:
             self.logger.start()
 
+        self.instrument: Optional["BaseInstrument"] = None
+        self.instrument_warning: Optional[str] = None
+        if _build_instrument is not None:
+            try:
+                instrument, warning = _build_instrument(
+                    url=self.url,
+                    model=self.model,
+                    api_key=self.api_key,
+                )
+            except Exception:  # pragma: no cover - defensive fallback
+                instrument, warning = None, None
+            self.instrument = instrument
+            self.instrument_warning = warning
+
     # -----------------
     # Payload adapters
     # -----------------
     def _prepare_payload(self, payload: Dict[str, Any], *, stream: bool) -> Dict[str, Any]:
         """Normalize payload details for specific providers."""
+
+        if self.instrument is not None:
+            return payload
 
         target_url = (self.url or "").lower()
         if "openai.com" not in target_url:
@@ -219,18 +244,9 @@ class ChatClient:
     ) -> Optional[str]:
         to_send_user = pii_sanitize(user_text) if self.sanitize else user_text
         turn_messages = self.messages + [{"role": "user", "content": to_send_user}]
-        payload = build_payload(
-            model=self.model,
-            messages=turn_messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            stream=bool(self.stream),
-        )
-        payload = self._prepare_payload(payload, stream=bool(self.stream))
-
+        stream_callback = on_delta
         public_state: Dict[str, Any] = {}
         if self.stream:
-            stream_callback = on_delta
             if self.strip_reasoning and on_delta:
                 public_state = {"buffer": "", "public": ""}
 
@@ -246,9 +262,35 @@ class ChatClient:
 
                 stream_callback = sanitized_delta
 
-            assistant, _ = self.transport.send(payload, stream=True, on_chunk=stream_callback)
+        assistant: Optional[str] = None
+
+        if self.instrument is not None:
+            instrument_response = self.instrument.send_chat(
+                turn_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
+                stream=bool(self.stream),
+                on_chunk=stream_callback,
+            )
+            assistant = instrument_response.text
         else:
-            assistant, _ = self.transport.send(payload, stream=False)
+            payload = build_payload(
+                model=self.model,
+                messages=turn_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                stream=bool(self.stream),
+            )
+            payload = self._prepare_payload(payload, stream=bool(self.stream))
+
+            if self.stream:
+                assistant, _ = self.transport.send(
+                    payload,
+                    stream=True,
+                    on_chunk=stream_callback,
+                )
+            else:
+                assistant, _ = self.transport.send(payload, stream=False)
 
         if assistant is not None:
             if self.strip_reasoning:
@@ -298,19 +340,30 @@ class ChatClient:
         helper_messages = list(self.messages)
         helper_messages.append({"role": "system", "content": load_helper_prompt()})
         helper_messages.append({"role": "user", "content": helper_wrapped})
-        payload = build_payload(
-            model=self.model,
-            messages=helper_messages,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            stream=bool(self.stream),
-        )
-        payload = self._prepare_payload(payload, stream=bool(self.stream))
-
-        if self.stream:
-            reply, _ = self.transport.send(payload, stream=True, on_chunk=on_delta)
+        reply: Optional[str]
+        if self.instrument is not None:
+            instrument_response = self.instrument.send_chat(
+                helper_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
+                stream=bool(self.stream),
+                on_chunk=on_delta,
+            )
+            reply = instrument_response.text
         else:
-            reply, _ = self.transport.send(payload, stream=False)
+            payload = build_payload(
+                model=self.model,
+                messages=helper_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                stream=bool(self.stream),
+            )
+            payload = self._prepare_payload(payload, stream=bool(self.stream))
+
+            if self.stream:
+                reply, _ = self.transport.send(payload, stream=True, on_chunk=on_delta)
+            else:
+                reply, _ = self.transport.send(payload, stream=False)
 
         if reply is not None:
             if self.strip_reasoning:
@@ -343,6 +396,8 @@ class ChatClient:
             "strip_reasoning": bool(self.strip_reasoning),
             "logging_enabled": self.logger is not None,
             "has_api_key": bool(self.api_key),
+            "instrument": getattr(self.instrument, "name", None),
+            "instrument_warning": self.instrument_warning,
         }
 
     def log_path(self) -> Optional[Path]:
