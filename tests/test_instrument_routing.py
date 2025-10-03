@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import types
+import sys
 from typing import Any, Dict, Iterable, List, Optional
 
 import pytest
 
 from central.core.client import ChatClient
+from instruments.openai import OpenAIInstrument
 
 
 class _StubInstrument:
@@ -55,6 +57,17 @@ class _FakeTransport:
             on_chunk("transport-stream")
             return "transport-stream", {}
         return "transport-response", {}
+
+
+class _FakeChatCompletions:
+    def create(self, **kwargs: Any):
+        if kwargs.get("stream"):
+            chunk = types.SimpleNamespace(
+                choices=[types.SimpleNamespace(delta=types.SimpleNamespace(content="chat-delta"))]
+            )
+            return [chunk]
+        choice = types.SimpleNamespace(message=types.SimpleNamespace(content="chat-complete"))
+        return types.SimpleNamespace(choices=[choice])
 
 
 @pytest.mark.parametrize("stream", [False, True])
@@ -140,3 +153,63 @@ def test_chatclient_ollama_payload_passthrough(monkeypatch) -> None:
     assert payload["stream"] is False
     messages = payload.get("messages")
     assert isinstance(messages, list) and messages[-1]["content"] == "Hello Ollama"
+
+
+def test_openai_instrument_response_payload_types(monkeypatch) -> None:
+    class FakeResponses:
+        def __init__(self) -> None:
+            self.last_create_kwargs: Optional[Dict[str, Any]] = None
+            self.last_stream_kwargs: Optional[Dict[str, Any]] = None
+
+        def create(self, **kwargs: Any):
+            self.last_create_kwargs = dict(kwargs)
+            return types.SimpleNamespace(output_text="responses-complete")
+
+        def stream(self, **kwargs: Any):
+            self.last_stream_kwargs = dict(kwargs)
+
+            class _Stream:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, exc_type, exc, tb):
+                    return False
+
+                def __iter__(self_inner):
+                    yield types.SimpleNamespace(type="response.output_text.delta", delta="resp-delta")
+
+                def get_final_response(self_inner):
+                    return types.SimpleNamespace(output_text="responses-stream-complete")
+
+            return _Stream()
+
+    class FakeOpenAI:
+        def __init__(self, api_key: str) -> None:
+            self.api_key = api_key
+            self.chat = types.SimpleNamespace(completions=_FakeChatCompletions())
+            self.responses = FakeResponses()
+
+    fake_module = types.ModuleType("openai")
+    fake_module.OpenAI = FakeOpenAI
+
+    monkeypatch.setitem(sys.modules, "openai", fake_module)
+
+    instrument = OpenAIInstrument(
+        url="https://api.openai.com/v1/responses",
+        model="gpt-4o",
+        api_key="sk-test",
+    )
+
+    instrument.send_chat([{"role": "user", "content": "hi"}])
+    create_kwargs = instrument._client.responses.last_create_kwargs
+    assert create_kwargs is not None
+    assert create_kwargs["input"][0]["content"][0]["type"] == "input_text"
+
+    chunks: List[str] = []
+    instrument.send_chat([{"role": "user", "content": "hi"}], stream=True, on_chunk=chunks.append)
+    stream_kwargs = instrument._client.responses.last_stream_kwargs
+    assert stream_kwargs is not None
+    assert stream_kwargs["input"][0]["content"][0]["type"] == "input_text"
+    assert chunks == ["resp-delta"]
+
+    monkeypatch.delitem(sys.modules, "openai")
