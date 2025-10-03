@@ -125,6 +125,8 @@ def test_chatclient_openai_rest_payload(monkeypatch) -> None:
     assert "stream_options" not in payload
     assert payload.get("max_completion_tokens") is None
     assert payload.get("max_tokens") == 77
+    prompt = payload.get("prompt")
+    assert isinstance(prompt, str) and "Hello REST" in prompt
     messages = payload.get("messages")
     assert isinstance(messages, list) and messages
     assert messages[-1]["content"][0]["text"] == "Hello REST"
@@ -151,6 +153,8 @@ def test_chatclient_ollama_payload_passthrough(monkeypatch) -> None:
     payload = transport.sent[0]["payload"]
     assert payload["model"] == "qwen/qwen3-1.7b"
     assert payload["stream"] is False
+    prompt = payload.get("prompt")
+    assert isinstance(prompt, str) and "Hello Ollama" in prompt
     messages = payload.get("messages")
     assert isinstance(messages, list) and messages[-1]["content"] == "Hello Ollama"
 
