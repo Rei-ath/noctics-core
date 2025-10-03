@@ -200,16 +200,34 @@ def test_openai_instrument_response_payload_types(monkeypatch) -> None:
         api_key="sk-test",
     )
 
-    instrument.send_chat([{"role": "user", "content": "hi"}])
+    instrument.send_chat([{"role": "user", "content": "hi"}], temperature=0.5)
     create_kwargs = instrument._client.responses.last_create_kwargs
     assert create_kwargs is not None
     assert create_kwargs["input"][0]["content"][0]["type"] == "input_text"
+    assert "temperature" in create_kwargs
 
     chunks: List[str] = []
-    instrument.send_chat([{"role": "user", "content": "hi"}], stream=True, on_chunk=chunks.append)
+    instrument.send_chat(
+        [{"role": "user", "content": "hi"}],
+        stream=True,
+        temperature=0.5,
+        on_chunk=chunks.append,
+    )
     stream_kwargs = instrument._client.responses.last_stream_kwargs
     assert stream_kwargs is not None
     assert stream_kwargs["input"][0]["content"][0]["type"] == "input_text"
     assert chunks == ["resp-delta"]
+    assert "temperature" in stream_kwargs
+
+    gpt5_instrument = OpenAIInstrument(
+        url="https://api.openai.com/v1/responses",
+        model="gpt-5.0-preview",
+        api_key="sk-test",
+    )
+
+    gpt5_instrument.send_chat([{"role": "user", "content": "hi"}], temperature=0.5)
+    gpt5_kwargs = gpt5_instrument._client.responses.last_create_kwargs
+    assert gpt5_kwargs is not None
+    assert "temperature" not in gpt5_kwargs
 
     monkeypatch.delitem(sys.modules, "openai")
