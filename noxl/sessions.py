@@ -615,31 +615,44 @@ def _discover_user_contexts(root: Path) -> List[Dict[str, Any]]:
     """Return contexts describing each user accessible from ``root``."""
 
     contexts: List[Dict[str, Any]] = []
-    if not root.exists():
-        return contexts
+    seen_roots: set[str] = set()
 
-    # Legacy: root directly stores session day directories
-    if _looks_like_session_store(root):
-        contexts.append(_build_context_for_session_root(root, DEFAULT_USER_ID))
-        return contexts
+    def _add_context(ctx: Dict[str, Any]) -> None:
+        session_root = ctx["session_root"]
+        try:
+            key = str(Path(session_root).resolve())
+        except Exception:
+            key = str(Path(session_root))
+        if key in seen_roots:
+            return
+        seen_roots.add(key)
+        contexts.append(ctx)
 
-    # Prefer explicit user directories
-    for child in sorted([p for p in root.iterdir() if p.is_dir()]):
-        if child.name == SESSION_SUBDIR and _looks_like_session_store(child):
-            contexts.append(_build_context_for_session_root(child, DEFAULT_USER_ID))
-            continue
+    def _scan_base(base: Path, *, fallback_user: Optional[str] = None) -> None:
+        if not base.exists():
+            return
+        if _looks_like_session_store(base):
+            _add_context(_build_context_for_session_root(base, fallback_user))
+            return
+        for child in sorted([p for p in base.iterdir() if p.is_dir()]):
+            if child.name == SESSION_SUBDIR and _looks_like_session_store(child):
+                _add_context(_build_context_for_session_root(child, fallback_user))
+                continue
+            if _looks_like_session_store(child):
+                _add_context(_build_context_for_session_root(child))
+                continue
+            session_root = child / SESSION_SUBDIR
+            if _looks_like_session_store(session_root):
+                _add_context(_build_context_for_user_root(child, session_root))
 
-        if _looks_like_session_store(child):
-            contexts.append(_build_context_for_session_root(child))
-            continue
+    fallback = DEFAULT_USER_ID if root == SESSION_ROOT else None
+    _scan_base(root, fallback_user=fallback)
 
-        session_root = child / SESSION_SUBDIR
-        if _looks_like_session_store(session_root):
-            contexts.append(_build_context_for_user_root(child, session_root))
+    if root == SESSION_ROOT and USERS_ROOT.exists():
+        _scan_base(USERS_ROOT)
 
-    # Fallback to legacy top-level sessions directory if no contexts were found
     if not contexts and root != SESSION_ROOT and SESSION_ROOT.exists():
-        contexts.append(_build_context_for_session_root(SESSION_ROOT, DEFAULT_USER_ID))
+        _scan_base(SESSION_ROOT, fallback_user=DEFAULT_USER_ID)
 
     return contexts
 

@@ -26,7 +26,8 @@ class LLMTransport:
         if "/api/generate" in self.url:
             send_payload.pop("messages", None)
         data = json.dumps(send_payload).encode("utf-8")
-        req = Request(self.url, data=data, headers=self._headers(), method="POST")
+        headers = self._headers(stream=stream)
+        req = Request(self.url, data=data, headers=headers, method="POST")
         if "/api/generate" in self.url:
             if stream:
                 text = self._stream_generate(req, on_chunk)
@@ -40,10 +41,12 @@ class LLMTransport:
     # -----------------
     # Internal helpers
     # -----------------
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self, *, stream: bool = False) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        if stream:
+            headers.setdefault("Accept", "text/event-stream")
         return headers
 
     def _request_json(self, req: Request) -> Tuple[Optional[str], Dict[str, Any]]:

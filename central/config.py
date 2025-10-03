@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 __all__ = [
     "CentralConfig",
-    "HelperConfig",
+    "InstrumentConfig",
     "DeveloperConfig",
     "get_runtime_config",
     "reload_config",
@@ -27,7 +27,7 @@ _DEFAULT_CONFIG_LOCATIONS: tuple[Path, ...] = (
 
 
 @dataclass(slots=True)
-class HelperConfig:
+class InstrumentConfig:
     automation: bool = False
     roster: List[str] = field(default_factory=list)
 
@@ -39,21 +39,31 @@ class DeveloperConfig:
 
 @dataclass(slots=True)
 class CentralConfig:
-    helper: HelperConfig = field(default_factory=HelperConfig)
+    instrument: InstrumentConfig = field(default_factory=InstrumentConfig)
     developer: DeveloperConfig = field(default_factory=DeveloperConfig)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CentralConfig":
-        helper_data = data.get("helper", {}) if isinstance(data, dict) else {}
-        automation = bool(helper_data.get("automation", False)) if isinstance(helper_data, dict) else False
-        roster_raw = helper_data.get("roster", []) if isinstance(helper_data, dict) else []
+        if isinstance(data, dict):
+            instrument_data = data.get("instrument")
+            if not isinstance(instrument_data, dict):
+                instrument_data = data.get("helper", {})
+        else:
+            instrument_data = {}
+
+        automation = (
+            bool(instrument_data.get("automation", False)) if isinstance(instrument_data, dict) else False
+        )
+        roster_raw = (
+            instrument_data.get("roster", []) if isinstance(instrument_data, dict) else []
+        )
         roster = [str(item).strip() for item in roster_raw if str(item).strip()]
-        helper = HelperConfig(automation=automation, roster=roster)
+        instrument = InstrumentConfig(automation=automation, roster=roster)
         developer_data = data.get("developer", {}) if isinstance(data, dict) else {}
         passphrase_raw = developer_data.get("passphrase") if isinstance(developer_data, dict) else None
         passphrase = str(passphrase_raw).strip() if passphrase_raw is not None else None
         developer = DeveloperConfig(passphrase=passphrase or None)
-        return cls(helper=helper, developer=developer)
+        return cls(instrument=instrument, developer=developer)
 
 
 def _candidate_paths(explicit: Optional[Path]) -> Iterable[Path]:
