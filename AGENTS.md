@@ -6,6 +6,13 @@
 - Prefer the bootstrap script: run `scripts/nox.run` to spin up the bundled Ollama binary, pull/build the model, and launch Central with the right URL/model exports.
 - Export overrides when needed: `CENTRAL_MODEL`, `CENTRAL_LLM_URL_OVERRIDE`, `CENTRAL_LLM_MODEL_OVERRIDE`, `OLLAMA_HOST`, `OLLAMA_REPO_URL`.
 
+## Submodules & Repository Sync
+- The root project now vendors the `noctics-core` git repo as a submodule at `core/`. After cloning the top-level repo run `git submodule update --init --recursive` to pull the core sources.
+- Day-to-day core work still happens inside `core/`; commit and push there first (`git -C core status`, `git -C core commit …`, `git -C core push origin main`).
+- Once `noctics-core` is pushed, update the superproject pointer from the repo root with `git add core && git commit -m "chore: bump core"` (or bundle other top-level changes). Push the superproject afterwards.
+- Configure `git config push.recurseSubmodules on-demand` in the superproject so a single `git push` can cascade core commits when needed.
+- Never rewrite the submodule from the parent via `git add core/…` file paths—stage the submodule pointer only.
+
 ## Repository Layout
 - `central/`
   - `cli/`: argument parsing, interactive shell, dev tooling, startup status HUD.
@@ -22,12 +29,14 @@
 - `scripts/`: automation (`nox.run`, self-play/self-improve harnesses).
 - `tests/`: pytest suite covering CLI, helper flow, transport, logging, titles.
 - `docs/`: task guides (CLI usage, helpers, sessions) – keep them in sync with behavior.
+- `instruments/`: SDK-backed provider integrations. `OpenAIInstrument` is the first implementation; additional vendors drop in here and register through `instruments.__init__`.
 
 ## Development Workflow
 - Activate the env (`source jenv/bin/activate`) before linting or testing.
 - Run tests: `pytest -q` or targeted selections (`pytest -k helper -q`).
 - Lint/format: `ruff check .`, `black .`, `isort .` as needed (match CI expectations).
 - Use `scripts/nox.run` for manual testing; it prints the endpoint/model and will pull/build `CENTRAL_MODEL` automatically if Ollama lacks it.
+- Central auto-detects SDK instruments (e.g., OpenAI) via `instruments/`; ensure required SDKs (`pip install openai>=1.0`) and API keys (`OPENAI_API_KEY`/`CENTRAL_LLM_API_KEY`) are present when targeting remote providers. Streaming falls back to raw HTTP if an instrument is unavailable.
 - When developing helper automation, simulate helper queries via the CLI; Central emits `[HELPER QUERY]` when its self-score ≤ 5 and expects the router to respond.
 - Keep commits clean (Conventional Commits) and avoid reintroducing large binaries—if one slips in, rewrite history with `git filter-repo` before pushing.
 
