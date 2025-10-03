@@ -150,16 +150,9 @@ class ChatClient:
 
         if self.max_tokens and self.max_tokens > 0:
             adjusted.setdefault("max_tokens", self.max_tokens)
-            adjusted.setdefault("max_completion_tokens", self.max_tokens)
-
-        model_name = str(self.model)
-        if model_name.startswith(("gpt-4.1", "gpt-5", "gpt-4o", "o1")):
-            adjusted.setdefault("modalities", ["text"])
-            adjusted.setdefault("response_format", {"type": "text"})
 
         if stream:
             adjusted["stream"] = True
-            adjusted.setdefault("stream_options", {"include_usage": False})
 
         return adjusted
 
