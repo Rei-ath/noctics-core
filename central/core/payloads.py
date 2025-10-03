@@ -82,7 +82,7 @@ def build_payload(
     }
 
     if prompt:
-        payload["messages"] = prompt
+        payload["prompt"] = prompt
     # if system_text:
     #     payload["system"] = system_text
 
