@@ -93,7 +93,8 @@ Environment variables take precedence over the JSON file.
 
 ## Sessions
 
-- Files live under `memory/sessions/YYYY-MM-DD/`:
+- By default, saved conversations live under `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/` (set `NOCTICS_MEMORY_HOME` to override).
+- Legacy logs stored inside the repository’s `memory/` folder are copied into the local data directory the first time you run a new build.
 - `session-*.jsonl`: JSON Lines turn records (legacy `.json` files still supported)
   - `session-*.meta.json`: metadata sidecar (id, path, title, turns, created/updated)
 - Auto-title on exit if no custom title.
@@ -116,7 +117,7 @@ Environment variables take precedence over the JSON file.
 
 - `python -m noxl` — list recent sessions (use `--limit` to refine)
 - `python -m noxl --search TEXT` — filter by metadata or message content
-- `python -m noxl list --root memory/early-archives` — inspect alternate session roots
+- `python -m noxl list --root ~/.local/share/noctics/memory/early-archives` — inspect alternate session roots
 - `python -m noxl --show <session>` — pretty-print a saved conversation (`--raw` for JSON)
 - `python -m noxl --latest` — view the latest session summary
 - `python -m noxl rename <session> "New Title"` — rename stored metadata
@@ -125,7 +126,7 @@ Environment variables take precedence over the JSON file.
 - `python -m noxl meta <session>` — print the metadata JSON
 - `python -m noxl count --search TEXT` — count matching sessions
 
-Most subcommands accept `--root PATH` to switch between `memory/sessions` and other directories (for example `memory/early-archives`).
+Most subcommands accept `--root PATH` to switch between the default sessions directory and other locations (for example `~/.local/share/noctics/memory/early-archives`).
 
 ## Tab Completion
 

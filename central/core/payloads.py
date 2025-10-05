@@ -81,8 +81,8 @@ def build_payload(
         # "options": options,
     }
 
-    if prompt:
-        payload["prompt"] = prompt
+    # if prompt:
+    #     payload["prompt"] = prompt
     # if system_text:
     #     payload["system"] = system_text
 

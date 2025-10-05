@@ -123,9 +123,9 @@ class ChatClient:
             return payload
 
         target_url = (self.url or "").lower()
+        # print(payload)
         if "openai.com" not in target_url:
             return payload
-
         adjusted: Dict[str, Any] = dict(payload)
 
         messages = adjusted.get("messages")
@@ -145,8 +145,8 @@ class ChatClient:
                 converted.append(rewritten)
             adjusted["messages"] = converted
 
-        if self.temperature is not None:
-            adjusted.setdefault("temperature", self.temperature)
+        # if self.temperature is not None:
+        #     adjusted.setdefault("temperature", self.temperature)
 
         if self.max_tokens and self.max_tokens > 0:
             adjusted.setdefault("max_tokens", self.max_tokens)

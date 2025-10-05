@@ -7,11 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+from interfaces.paths import resolve_memory_root, resolve_sessions_root, resolve_users_root
 from interfaces.session_logger import format_session_display_name
 
-SESSION_ROOT = Path("memory/sessions")
-ARCHIVE_ROOT = Path("memory/early-archives")
-USERS_ROOT = Path("memory/users")
+SESSION_ROOT = resolve_sessions_root()
+ARCHIVE_ROOT = resolve_memory_root() / "early-archives"
+USERS_ROOT = resolve_users_root()
 USER_META_FILENAME = "user.json"
 SESSION_SUBDIR = "sessions"
 DEFAULT_USER_ID = "default"

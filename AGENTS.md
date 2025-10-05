@@ -23,13 +23,20 @@
   - `system_info.py`, `runtime_identity.py`, `version.py`, `colors.py`: shared utilities.
 - `interfaces/`: adapters for dotenv loading, session logging, PII sanitisation.
 - `noxl/`: programmatic access to session utilities plus an alternate CLI.
-- `memory/`: `system_prompt.txt`, per-session logs (`memory/sessions/...`), day aggregates.
+- `memory/`: packaged prompts (`system_prompt.txt` etc.). Live session data defaults to `~/.local/share/noctics/memory/` so it persists across repo updates (override with `NOCTICS_MEMORY_HOME`).
 - `models/`: `ModelFile` templates or manual `.gguf` drops; the bootstrap script reads from here when it cannot `ollama pull`.
 - `inference/`: houses the cached `ollama` binary (or `ollama-mini` clone).
 - `scripts/`: automation (`nox.run`, self-play/self-improve harnesses).
 - `tests/`: pytest suite covering CLI, helper flow, transport, logging, titles.
 - `docs/`: task guides (CLI usage, helpers, sessions) – keep them in sync with behavior.
 - `instruments/`: SDK-backed provider integrations. `OpenAIInstrument` is the first implementation; additional vendors drop in here and register through `instruments.__init__`.
+
+### Build Targets
+- `scripts/build_release.sh` → standard `dist/noctics-core/` bundle.
+- `scripts/build_j_rei.sh` → personal “Nox” build with the active `.env` baked in (`dist/noctics-j-rei/`).
+- `scripts/build_edge.sh` → Gemma3 (edge) bundle (`dist/noctics-edge/`).
+- `scripts/build_ejer.sh` → Gemma3:1B bundle (`dist/noctics-ejer/`).
+All builds package the shared system prompt (`memory/system_prompt.txt`) so the assistant identifies itself as **Nox** inside Noctics.
 
 ## Development Workflow
 - Activate the env (`source jenv/bin/activate`) before linting or testing.
@@ -47,7 +54,7 @@
 - Sanitisation removes `<think>` traces before streaming replies; `--show-think` toggles the explicit thinking loader animation.
 
 ## Sessions & Memory
-- Each run writes JSONL logs under `memory/sessions/<YYYY-MM-DD>/session-*.jsonl` with `.meta.json` sidecars.
+- Each run writes JSONL logs under `~/.local/share/noctics/memory/sessions/<YYYY-MM-DD>/session-*.jsonl` with `.meta.json` sidecars (automatically migrated from the legacy `memory/` folder if present).
 - `noxl.sessions` APIs support listing, loading past turns, merging, and archival (`python -m noxl --help`).
 - Session titles can be set by Central mid-chat via `[SET TITLE]Name[/SET TITLE]`; CLI stores the latest title and updates metadata.
 

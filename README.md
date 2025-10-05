@@ -108,7 +108,7 @@ First prompt: When you start the CLI it now asks for your username (unless `--de
 
 ## Sessions
 
-- Storage: `memory/sessions/YYYY-MM-DD/`
+- Storage: `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/` by default (override with `NOCTICS_MEMORY_HOME`; legacy `memory/` folders are migrated automatically).
   - Turns: `session-*.jsonl` (JSON Lines turn records; legacy `.json` files still load)
   - Day aggregate: `day.json` (auto-appended when sessions close; deduped)
   - Meta: `session-*.meta.json` (title, turns, created/updated, etc.)
@@ -117,7 +117,7 @@ First prompt: When you start the CLI it now asks for your username (unless `--de
   - Rename any saved session: `/rename session-YYYYMMDD-HHMMSS New Title` or `--sessions-rename ...`
   - Auto-title: on exit, Central derives a concise title from the first meaningful user message if you didn’t set one
 - Listing:
-  - Non-interactive: `--sessions-ls` (full list), `--sessions-latest` (show most recent), or `--sessions-archive-early` (merge everything except latest into `memory/early-archives/`)
+  - Non-interactive: `--sessions-ls` (full list), `--sessions-latest` (show most recent), or `--sessions-archive-early` (merge everything except latest into `~/.local/share/noctics/memory/early-archives/`)
   - Interactive: `/sessions` or `/ls`; quick summary: `/last`; browse menu: `/browse`; pretty-print: `/show ID`; archive: `/archive`
 - Loading:
   - `--sessions-load ID_OR_PATH` or in chat `/load ID`

@@ -20,6 +20,9 @@ from . import (
     show_session,
 )
 
+DEFAULT_SESSION_ROOT_STR = str(SESSION_ROOT)
+DEFAULT_ARCHIVE_ROOT_STR = str(ARCHIVE_ROOT)
+
 
 def _add_list_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
@@ -38,7 +41,7 @@ def _add_list_options(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
 
@@ -91,7 +94,7 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
     show_parser = subparsers.add_parser(
@@ -109,7 +112,7 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
     rename_parser = subparsers.add_parser(
@@ -128,7 +131,7 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
     merge_parser = subparsers.add_parser(
@@ -146,7 +149,7 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Destination root directory for the merged session (default: memory/sessions).",
+        help=f"Destination root directory for the merged session (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
     archive_parser = subparsers.add_parser(
@@ -163,14 +166,14 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
     archive_parser.add_argument(
         "--archive-root",
         metavar="PATH",
         type=_path_arg,
         default=ARCHIVE_ROOT,
-        help="Archive destination directory (default: memory/early-archives).",
+        help=f"Archive destination directory (default: {DEFAULT_ARCHIVE_ROOT_STR}).",
     )
 
     meta_parser = subparsers.add_parser(
@@ -183,7 +186,7 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
     count_parser = subparsers.add_parser(
@@ -200,7 +203,7 @@ def build_parser(prog: str = "noxl") -> argparse.ArgumentParser:
         metavar="PATH",
         type=_path_arg,
         default=SESSION_ROOT,
-        help="Sessions root directory (default: memory/sessions).",
+        help=f"Sessions root directory (default: {DEFAULT_SESSION_ROOT_STR}).",
     )
 
     parser.set_defaults(command="list")
