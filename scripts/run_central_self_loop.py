@@ -69,7 +69,6 @@ def run_scenarios(
         logger = SessionLogger(
             model="central-self-loop",
             sanitized=False,
-            users_root=Path("memory/users"),
             user_id=user_id,
             user_display=user_display,
         )

@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .paths import resolve_sessions_root, resolve_users_root
+
 USER_SESSIONS_DIR = "sessions"
 USER_META_FILENAME = "user.json"
 
@@ -52,8 +54,8 @@ def format_session_display_name(session_id: str) -> str:
 class SessionLogger:
     model: str
     sanitized: bool
-    dirpath: Path = Path("memory/sessions")
-    users_root: Path = Path("memory/users")
+    dirpath: Optional[Path] = None
+    users_root: Optional[Path] = None
     user_id: Optional[str] = None
     user_display: Optional[str] = None
     _file: Optional[Path] = None
@@ -63,6 +65,10 @@ class SessionLogger:
     _title_custom: bool = False
     _display_name: Optional[str] = None
     _records: List[Dict[str, Any]] = field(default_factory=list, init=False)
+
+    def __post_init__(self) -> None:
+        self.dirpath = Path(self.dirpath) if self.dirpath is not None else resolve_sessions_root()
+        self.users_root = Path(self.users_root) if self.users_root is not None else resolve_users_root()
 
     def start(self) -> None:
         # Create a date-based subfolder (UTC) for sessions, e.g.,

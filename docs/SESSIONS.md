@@ -4,9 +4,10 @@ Central logs every session to JSONL and writes a companion meta file that tracks
 
 ## Files
 
-- `memory/sessions/YYYY-MM-DD/session-*.jsonl`: JSON Lines turn records (legacy `.json` files remain compatible)
-- `memory/sessions/YYYY-MM-DD/session-*.meta.json`: session metadata (id, path, turns, created, updated, title, custom)
-- `memory/sessions/YYYY-MM-DD/day.json`: aggregate of every session saved that day (deduplicated on session close)
+- By default, session files live under `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/` (override with `NOCTICS_MEMORY_HOME`).
+- `session-*.jsonl`: JSON Lines turn records (legacy `.json` files remain compatible)
+- `session-*.meta.json`: session metadata (id, path, turns, created, updated, title, custom)
+- `day.json`: aggregate of every session saved that day (deduplicated on session close)
 
 ## Titles
 
@@ -28,7 +29,7 @@ Central logs every session to JSONL and writes a companion meta file that tracks
 - Show only the most recent session in chat: `/last`
 - Pretty-print a session without loading it: `python main.py --sessions-show session-YYYYMMDD-HHMMSS` or `/show ID`
 - Interactively browse & view sessions: `python main.py --sessions-browse` or `/browse`
-- Archive everything but the latest session into `memory/early-archives/`:
+- Archive everything but the latest session into `~/.local/share/noctics/memory/early-archives/`:
   - `python main.py --sessions-archive-early`
   - Or in chat: `/archive`
 - Load a session as the starting context:
@@ -39,7 +40,7 @@ Central logs every session to JSONL and writes a companion meta file that tracks
 
 - List recent sessions: `python -m noxl` (use `--limit N` to change the count)
 - Search metadata/content: `python -m noxl --search "keyword"`
-- Inspect another root (e.g., archives): `python -m noxl list --root memory/early-archives`
+- Inspect another root (e.g., archives): `python -m noxl list --root ~/.local/share/noctics/memory/early-archives`
 - Show latest summary: `python -m noxl --latest`
 - Pretty-print a session: `python -m noxl --show session-YYYYMMDD-HHMMSS`
 - Dump raw JSON messages: `python -m noxl --show <id> --raw`
@@ -50,7 +51,7 @@ Central logs every session to JSONL and writes a companion meta file that tracks
 - Count matches: `python -m noxl count --search helper`
 - Library usage: `from noxl import list_sessions, load_session_messages, compute_title_from_messages`
 
-Tip: supply `--root PATH` (e.g., `--root memory/early-archives`) to operate on alternate session directories.
+Tip: supply `--root PATH` (e.g., `--root ~/.local/share/noctics/memory/early-archives`) to operate on alternate session directories.
 
 ## Merging
 
@@ -62,7 +63,7 @@ Tip: supply `--root PATH` (e.g., `--root memory/early-archives`) to operate on a
     - In chat: `/merge session-20250913-234409 session-20250914-010016`
 
 Notes:
-- The merged session is saved under `memory/sessions/merged-<date>/` with a meta title like `Merged: A | B | C`.
+- The merged session is saved under the sessions root (for example `~/.local/share/noctics/memory/sessions/merged-<date>/`) with a meta title like `Merged: A | B | C`.
 - You can rename the merged session later with `--sessions-rename` or `/rename`.
 
 Notes:
