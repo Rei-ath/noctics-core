@@ -6,7 +6,10 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 
 - `--url` string: Endpoint URL (env `CENTRAL_LLM_URL`)
 - `--model` string: Model name (env `CENTRAL_LLM_MODEL`)
-- `--system` string: System message (defaults to `memory/system_prompt*.txt` if present)
+- `--system` string: System message.
+  - Defaults when not provided:
+    - Dev mode: `memory/system_prompt.dev.local.txt` then `memory/system_prompt.dev.txt`
+    - Normal: `memory/system_prompt.local.txt` then `memory/system_prompt.txt`
 - `--user` string: Optional initial user message
 - `--messages` path: JSON file with an initial messages array
 - `--temperature` float: Sampling temperature (default 0.7)
@@ -16,7 +19,7 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `--sanitize`: Redact common PII from user text before sending
 - `--raw`: In non-streaming, print raw JSON response
 - `--api-key` string: API key (env `CENTRAL_LLM_API_KEY` or `OPENAI_API_KEY`)
-- `--helper` string: Set a helper label for display when helpers are mentioned
+- `--instrument` string (alias `--helper`): Set an instrument label for display when external calls are needed
 - `--anon-helper` / `--no-anon-helper`: Reserved sanitization toggle for future helper integration (default respects `CENTRAL_HELPER_ANON`).
 - `--show-think`: Include the assistant’s `<think>` reasoning blocks in output/logs (hidden by default).
 - `--sessions-ls`: List saved sessions (with titles) and exit
@@ -49,16 +52,16 @@ The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports st
 - `/reset`: Reset context to just the system message
 - `exit` / `quit`: Exit the session
 
-## Helper Flow
+## Instrument Flow
 
-Central tries to answer locally first. If it needs an external helper it:
+Central answers locally first. If it needs an external instrument it:
 
-1. Confirms which helper label to use (from env/config/defaults).
-2. Emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]` and tells you it is waiting for an external reply.
-3. If automation is disabled (default for the standalone core), it explains that the request could not be sent and suggests local follow-up steps.
-4. When automation is available (router service), `ChatClient.process_helper_result` stitches the returned `[HELPER RESULT]` into the conversation automatically.
+1. Confirms which instrument label to use (from env/config/defaults).
+2. Emits a sanitized `[INSTRUMENT QUERY]…[/INSTRUMENT QUERY]` and explains whether automation is available.
+3. If automation is disabled (standalone core), it suggests local follow-up steps.
+4. When automation is available (router), `ChatClient.process_instrument_result` stitches the returned `[INSTRUMENT RESULT]` into the conversation automatically.
 
-Sanitisation honours `CENTRAL_HELPER_ANON` and name redaction env vars. You can preconfigure helper rosters and automation flags via `central/config.py` (JSON) or environment variables.
+Sanitisation honours `CENTRAL_INSTRUMENT_ANON` (or `CENTRAL_HELPER_ANON`) and name redaction env vars. Configure rosters and automation via JSON config or environment variables.
 
 ### Configuration quick reference
 
@@ -76,9 +79,9 @@ Sanitisation honours `CENTRAL_HELPER_ANON` and name redaction env vars. You can 
 
 Environment variables take precedence over the JSON file.
 
-### Developer mode shell automation
+### Developer mode prompt & shell automation
 
-- When `--dev` is supplied, the model is encouraged (see `memory/system_prompt.txt`) to issue `[DEV SHELL COMMAND]…[/DEV SHELL COMMAND]` blocks for local diagnostics (for example “`ip addr show`”).
+- When `--dev` is supplied, the CLI uses `memory/system_prompt.dev.txt` (or `.dev.local.txt` if present). The prompt allows `[DEV SHELL COMMAND]…[/DEV SHELL COMMAND]` blocks for local diagnostics (for example “`ip addr show`”).
 - The CLI executes those commands automatically, prints the output as `[DEV SHELL RESULT]`, and appends it to the session so follow-up answers can reference the data.
 - You can still run commands manually via `/shell CMD`.
 

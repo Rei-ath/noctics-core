@@ -34,7 +34,7 @@ except Exception:  # pragma: no cover - optional dependency
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from instruments.base import BaseInstrument
 
-DEFAULT_URL = "http://127.0.0.1:11434/api/generate"
+DEFAULT_URL = "http://127.0.0.1:11434/api/chat"
 
 
 class ChatClient:
@@ -44,7 +44,7 @@ class ChatClient:
         self,
         *,
         url: str | None = None,
-        model: str = os.getenv("CENTRAL_LLM_MODEL", "qwen/qwen3-1.7b"),
+        model: str = os.getenv("CENTRAL_LLM_MODEL", "noctics-edge:latest"),
         api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = -1,
@@ -218,13 +218,25 @@ class ChatClient:
     # Helper-related helpers
     # ----------------------
     @staticmethod
-    def wants_helper(text: Optional[str]) -> bool:
+    def wants_instrument(text: Optional[str]) -> bool:
+        """Return True if the assistant text indicates an external instrument is needed.
+
+        Matches modern INSTRUMENT tags and legacy HELPER phrasing for compatibility.
+        """
         if not text:
             return False
         lowered = text.lower()
-        return "[helper query]" in lowered or (
-            "requires a helper" in lowered and "paste a helper response" in lowered
+        return ("[instrument query]" in lowered) or (
+            "requires an instrument" in lowered
+        ) or (
+            # Legacy helper signaling
+            "[helper query]" in lowered or (
+                "requires a helper" in lowered and "paste a helper response" in lowered
+            )
         )
+
+    # Backwards-compat alias (tests and older callers)
+    wants_helper = wants_instrument
 
     # -------------
     # Public API
@@ -372,6 +384,15 @@ class ChatClient:
                 ]
                 self.logger.log_turn(to_log)
         return reply
+
+    # New naming for symmetry with instruments; keep helper path as implementation
+    def process_instrument_result(
+        self,
+        instrument_text: str,
+        *,
+        on_delta: Optional[Callable[[str], None]] = None,
+    ) -> Optional[str]:
+        return self.process_helper_result(instrument_text, on_delta=on_delta)
 
     # -----------------
     # Diagnostics / info
