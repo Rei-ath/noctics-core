@@ -23,7 +23,7 @@
   - `system_info.py`, `runtime_identity.py`, `version.py`, `colors.py`: shared utilities.
 - `interfaces/`: adapters for dotenv loading, session logging, PII sanitisation.
 - `noxl/`: programmatic access to session utilities plus an alternate CLI.
-- `memory/`: packaged prompts (`system_prompt.txt` etc.). Live session data defaults to `~/.local/share/noctics/memory/` so it persists across repo updates (override with `NOCTICS_MEMORY_HOME`).
+- `memory/`: packaged prompts (`system_prompt.txt`, `system_prompt.dev.txt`, etc.). Live session data defaults to `~/.local/share/noctics/memory/` so it persists across repo updates (override with `NOCTICS_MEMORY_HOME`).
 - `models/`: `ModelFile` templates or manual `.gguf` drops; the bootstrap script reads from here when it cannot `ollama pull`.
 - `inference/`: houses the cached `ollama` binary (or `ollama-mini` clone).
 - `scripts/`: automation (`nox.run`, self-play/self-improve harnesses).
@@ -36,7 +36,7 @@
 - `scripts/build_j_rei.sh` → personal “Nox” build with the active `.env` baked in (`dist/noctics-j-rei/`).
 - `scripts/build_edge.sh` → Gemma3 (edge) bundle (`dist/noctics-edge/`).
 - `scripts/build_ejer.sh` → Gemma3:1B bundle (`dist/noctics-ejer/`).
-All builds package the shared system prompt (`memory/system_prompt.txt`) so the assistant identifies itself as **Nox** inside Noctics.
+All builds package the shared prompts (`memory/system_prompt.txt` and `memory/system_prompt.dev.txt`) so the assistant identifies itself as **Nox** inside Noctics (normal vs developer mode).
 
 ## Development Workflow
 - Activate the env (`source jenv/bin/activate`) before linting or testing.
@@ -49,7 +49,7 @@ All builds package the shared system prompt (`memory/system_prompt.txt`) so the 
 
 ## Runtime & Helper Behaviour
 - Central self-scores responses; at ≤ 5 it prepares a helper query. If no router is integrated it tells the user helpers are unavailable.
-- Helper roster awareness lives in `memory/system_prompt.txt`; adjust when adding or removing helpers.
+- Instrument semantics live in `memory/system_prompt.txt`; adjust only if you change the external-calls workflow. Legacy “helper” aliases are maintained for compatibility.
 - Dev mode (gated by passphrase) unlocks shell bridging and shows developer diagnostics; keep it hidden in user mode.
 - Sanitisation removes `<think>` traces before streaming replies; `--show-think` toggles the explicit thinking loader animation.
 

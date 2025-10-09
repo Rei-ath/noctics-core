@@ -21,8 +21,8 @@ Local, privacy-first chat orchestration with helper-aware streaming and session 
 
 Central loads `.env` automatically from both the package folder and the current working directory. Existing environment variables are not overwritten. You can also provide a JSON config via `CENTRAL_CONFIG` or `config/central.json`; see `config/central.example.json` for the schema (currently helper automation toggle and custom helper roster).
 
-- `CENTRAL_LLM_URL` (default `http://localhost:1234/v1/chat/completions`)
-- `CENTRAL_LLM_MODEL` (default `qwen/qwen3-1.7b`)
+- `CENTRAL_LLM_URL` (default openai-like: `http://localhost:1234/v1/chat/completions`)
+- `CENTRAL_LLM_MODEL` (set for your endpoint; defaults to `noctics-edge:latest` in this repo)
 - `CENTRAL_LLM_API_KEY` or `OPENAI_API_KEY` (optional)
 - `CENTRAL_HELPER_ANON` (default `1`): show sanitized helper queries for safe sharing
 - `CENTRAL_REDACT_NAMES` (optional): comma-separated names to redact in helper queries
@@ -75,8 +75,8 @@ The helper script runs `git submodule update --init --remote core` and prints th
   - `python main.py --stream`
 - Show the model's raw `<think>` reasoning (hidden by default):
   - `python main.py --show-think`
-- Name a helper label for helper-related prompts:
-  - `python main.py --helper claude`
+- Name an instrument label for external calls (alias: `--helper`):
+  - `python main.py --instrument claude`
 - List saved sessions and titles:
   - `python main.py --sessions-ls`
 - Rename a saved session title:
@@ -86,25 +86,18 @@ The helper script runs `git submodule update --init --remote core` and prints th
 
 See `docs/CLI.md` for all flags and interactive commands.
 
-## Helper Flow
+## Instrument Flow
 
-Central first tries to answer locally. If it needs outside help, it confirms which helper should be used, emits a sanitized `[HELPER QUERY]…[/HELPER QUERY]`, and—when automation is unavailable—explains that the request could not be sent. Once Central is paired with the full Noctics router, the helper response will arrive automatically and be stitched into the conversation.
+Central first tries to answer locally. If it needs an external instrument, it confirms which instrument to use, emits a sanitized `[INSTRUMENT QUERY]…[/INSTRUMENT QUERY]`, and—when automation is unavailable—explains that the request could not be sent. When paired with the Noctics router, the instrument response arrives automatically and is stitched into the conversation as `[INSTRUMENT RESULT]`.
 
-Privacy: Helper requests are always sanitized (PII redaction + optional name masking). Automation is disabled by default; toggle it with `CENTRAL_HELPER_AUTOMATION` or the JSON config once you wire in the router.
+Privacy: Instrument requests are always sanitized (PII redaction + optional name masking). Automation is disabled by default; toggle it with `CENTRAL_HELPER_AUTOMATION` (compat alias) or the JSON config once you wire in the router.
 
-Selecting a helper: If you haven’t set `--helper`, the CLI asks you to choose one when the request happens (from `CENTRAL_HELPERS`, config roster, or defaults). You can type a number or a custom name.
+Selecting an instrument: If you haven’t set `--instrument`, the CLI asks you to choose one when the request happens (from `CENTRAL_HELPERS` roster, config roster, or defaults). You can type a number or a custom name.
 
-Built-in helper names (override with `CENTRAL_HELPERS`):
-- claude (Anthropic)
-- gpt-4o / gpt-4 (OpenAI)
-- grok (xAI)
-- gemini (Google)
-- llama (Meta)
-- mistral (Mistral AI)
-- cohere (Cohere)
-- deepseek (DeepSeek)
+Common instrument labels (override via env/config):
+- claude, gpt-4o, grok, gemini, llama, mistral, cohere, deepseek
 
-First prompt: When you start the CLI it now asks for your username (unless `--dev` is supplied) and whether you want streaming enabled. On the very first message within a session, the CLI still proposes a short title based on your request and lets you accept or override it. A `Hardware context: …` line is also injected into the system prompt so the assistant knows which OS/CPU/memory it is running on.
+First prompt: When you start the CLI it asks for your username (unless `--dev` is supplied) and whether you want streaming enabled. On the first message, it proposes a short title and lets you accept or override it. A `Hardware context: …` line is injected into the system prompt so the assistant knows where it’s running.
 
 ## Sessions
 
