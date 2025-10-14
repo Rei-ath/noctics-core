@@ -300,7 +300,12 @@ class ChatClient:
         if assistant is not None:
             if self.strip_reasoning:
                 assistant = strip_chain_of_thought(assistant)
-                if self.stream and on_delta and public_state:
+                if (
+                    self.stream
+                    and on_delta
+                    and public_state
+                    and self.instrument is None
+                ):
                     public_text = public_state.get("public", "")
                     if len(assistant) > len(public_text):
                         on_delta(assistant[len(public_text):])

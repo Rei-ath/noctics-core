@@ -12,10 +12,16 @@ _HELPER_RESULT_BLOCK = re.compile(
     r"^\s*\[HELPER\s+RESULT\](.*?)\[/HELPER\s+RESULT\]\s*$",
     re.IGNORECASE | re.DOTALL,
 )
+_INSTRUMENT_RESULT_BLOCK = re.compile(
+    r"^\s*\[INSTRUMENT\s+RESULT\](.*?)\[/INSTRUMENT\s+RESULT\]\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 _AUX_BLOCKS = [
     re.compile(r"\[SET\s*TITLE\].*?\[/SET\s*TITLE\]", re.IGNORECASE | re.DOTALL),
     re.compile(r"\[HELPER\s+QUERY\].*?\[/HELPER\s+QUERY\]", re.IGNORECASE | re.DOTALL),
     re.compile(r"\[HELPER\s+RESULT\].*?\[/HELPER\s+RESULT\]", re.IGNORECASE | re.DOTALL),
+    re.compile(r"\[INSTRUMENT\s+QUERY\].*?\[/INSTRUMENT\s+QUERY\]", re.IGNORECASE | re.DOTALL),
+    re.compile(r"\[INSTRUMENT\s+RESULT\].*?\[/INSTRUMENT\s+RESULT\]", re.IGNORECASE | re.DOTALL),
 ]
 _CENTRAL_PREFIX = re.compile(r"^(?:Noctics\s+Central\s*[:：]\s*)+", re.IGNORECASE)
 _HARDWARE_PREFIX = re.compile(r"^hardware\s+context\s*:\s*", re.IGNORECASE)
@@ -74,11 +80,14 @@ def clean_public_reply(text: Optional[str]) -> Optional[str]:
     # Drop repeated CLI label prefixes such as "Noctics Central:"
     cleaned = _CENTRAL_PREFIX.sub("", cleaned, count=1).lstrip()
 
-    def _unwrap_helper_block(value: str) -> str:
-        match = _HELPER_RESULT_BLOCK.match(value)
-        return match.group(1).strip() if match else value
+    def _unwrap_result_block(value: str) -> str:
+        for pattern in (_HELPER_RESULT_BLOCK, _INSTRUMENT_RESULT_BLOCK):
+            match = pattern.match(value)
+            if match:
+                return match.group(1).strip()
+        return value
 
-    cleaned = _unwrap_helper_block(cleaned)
+    cleaned = _unwrap_result_block(cleaned)
 
     # Remove leading hardware context echoes
     lines = cleaned.splitlines()
@@ -96,13 +105,12 @@ def clean_public_reply(text: Optional[str]) -> Optional[str]:
         break
 
     cleaned = "\n".join(lines).strip()
-    cleaned = _unwrap_helper_block(cleaned)
+    cleaned = _unwrap_result_block(cleaned)
     for pattern in _AUX_BLOCKS:
         cleaned = pattern.sub("", cleaned)
     # Strip template tokens and closing tags produced by local models
     cleaned = re.sub(r"<\|/?(?:assistant|user)\|>", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\[\s*/\s*(?:assistant|dev|user)\s*\]", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"</\s*(?:assistant|dev|user)\s*>", "", cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.replace("```", "").replace("***", "")
     cleaned = cleaned.strip()
     return cleaned
