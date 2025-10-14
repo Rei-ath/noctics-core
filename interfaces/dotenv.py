@@ -36,6 +36,8 @@ def load_local_dotenv(here: Path | None = None) -> None:
 
     Does not overwrite existing environment variables.
     """
+    if os.getenv("NOCTICS_SKIP_DOTENV") == "1":
+        return
     if here is None:
         here = Path(__file__).resolve().parent
     candidates: list[Path] = [here / ".env", Path.cwd() / ".env"]
@@ -58,4 +60,3 @@ def load_local_dotenv(here: Path | None = None) -> None:
         unique_candidates.append(path)
 
     load_dotenv_files(unique_candidates)
-

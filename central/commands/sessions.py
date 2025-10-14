@@ -16,8 +16,21 @@ from noxl import (
 from interfaces.session_logger import format_session_display_name
 
 
-def list_sessions() -> List[Dict[str, object]]:
-    return noxl_list_sessions()
+def list_sessions(
+    *,
+    root: Optional[Path] = None,
+    user: Optional[str] = None,
+) -> List[Dict[str, object]]:
+    """Return session metadata, optionally scoped to a specific root/user."""
+
+    kwargs: Dict[str, object] = {}
+    if root is not None:
+        kwargs["root"] = root
+    if user is not None:
+        kwargs["user"] = user
+    if not kwargs:
+        return noxl_list_sessions()
+    return noxl_list_sessions(**kwargs)
 
 
 def latest_session() -> Optional[Dict[str, object]]:
@@ -55,14 +68,22 @@ def print_sessions(items: List[Dict[str, object]]) -> None:
         print(f"     path: {it.get('path')}")
 
 
-def resolve_by_ident_or_index(ident: str, items: Optional[List[Dict[str, object]]] = None) -> Optional[Path]:
-    items = items or noxl_list_sessions()
+def resolve_by_ident_or_index(
+    ident: str,
+    items: Optional[List[Dict[str, object]]] = None,
+    *,
+    root: Optional[Path] = None,
+) -> Optional[Path]:
+    """Resolve a session path by numeric index, id, or filesystem path."""
+
+    if items is None:
+        items = noxl_list_sessions(root=root) if root is not None else noxl_list_sessions()
     p: Optional[Path] = None
     if ident.isdigit():
         idx = int(ident)
         if 1 <= idx <= len(items):
             return Path(items[idx - 1]["path"])  # type: ignore[index]
-    p = resolve_session(ident)
+    p = resolve_session(ident, root=root) if root is not None else resolve_session(ident)
     return p
 
 

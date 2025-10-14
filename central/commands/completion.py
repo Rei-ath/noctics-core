@@ -30,7 +30,8 @@ def setup_completions() -> None:
         "/ls",
         "/last",
         "/iam",
-        "/helper",
+        "/instrument",
+        "/helper",  # alias for backwards compatibility
         "/anon",
         "/load",
         "/title",
@@ -40,7 +41,6 @@ def setup_completions() -> None:
         "/archive",
         "/show",
         "/browse",
-        
     ]
 
     helper_candidates = get_helper_candidates()
@@ -68,7 +68,7 @@ def setup_completions() -> None:
         arg_text = arg_region.lstrip()
         arg_index = 0 if not arg_text or arg_text.endswith(" ") else len(arg_text.split()) - 1
 
-        if head == "/helper":
+        if head in {"/instrument", "/helper"}:
             if beg >= len(head) + 1:
                 matches = [h for h in helper_candidates if h.startswith(text or "")]
                 return matches[state] if state < len(matches) else None

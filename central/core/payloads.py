@@ -74,20 +74,18 @@ def build_payload(
         options["num_predict"] = max_tokens
 
     system_text, prompt = _system_and_prompt(messages)
-    # print(prompt)
     payload: Dict[str, Any] = {
         "model": model,
         "stream": stream,
-        # "options": options,
+        "options": options,
     }
 
-    # if prompt:
-    #     payload["prompt"] = prompt
-    # if system_text:
-    #     payload["system"] = system_text
+    if prompt:
+        payload["prompt"] = prompt
+    if system_text:
+        payload["system"] = system_text
 
     # include chat-style messages for endpoints that support them
     if messages:
         payload["messages"] = messages
-    # print(payload)
     return payload
