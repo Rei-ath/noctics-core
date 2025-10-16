@@ -34,8 +34,8 @@
 ### Build Targets
 - `scripts/build_release.sh` → standard `dist/noctics-core/` bundle.
 - `scripts/build_j_rei.sh` → optional personal bundle that mirrors your active `.env`.
-- `scripts/build_edge.sh` → centi-nox (Qwen3 8B) bundle (`dist/centi-nox/`).
-- `scripts/build_ejer.sh` → micro-nox (Qwen3 1.7B) bundle (`dist/micro-nox/`).
+- `scripts/build_edge.sh` → centi-nox (Qwen3 8B) bundle (`dist/centi-noctics/`).
+- `scripts/build_ejer.sh` → micro-nox (Qwen3 1.7B) bundle (`dist/micro-noctics/`).
 All builds package the shared prompts (`memory/system_prompt.txt` and `memory/system_prompt.dev.txt`) so the assistant identifies itself as the scale-aware `*-nox` persona (normal vs developer mode).
 
 ### Nox Scale Map
