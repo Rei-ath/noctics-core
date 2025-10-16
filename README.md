@@ -21,9 +21,12 @@ Local, privacy-first chat orchestration with helper-aware streaming and session 
 
 Central loads `.env` automatically from both the package folder and the current working directory. Existing environment variables are not overwritten. You can also provide a JSON config via `CENTRAL_CONFIG` or `config/central.json`; see `config/central.example.json` for the schema (currently helper automation toggle and custom helper roster).
 
-- `CENTRAL_LLM_URL` (default openai-like: `http://localhost:1234/v1/chat/completions`)
-- `CENTRAL_LLM_MODEL` (set for your endpoint; defaults to `noctics-edge:latest` in this repo)
+- `CENTRAL_LLM_URL` (default local Ollama: `http://127.0.0.1:11434/api/generate`)
+- `CENTRAL_LLM_MODEL` (set for your endpoint; defaults to `centi-noctics:latest` in this repo)
 - `CENTRAL_LLM_API_KEY` or `OPENAI_API_KEY` (optional)
+- `CENTRAL_NOX_SCALE` (optional): force the persona to `nano`, `micro`, `milli`, or `centi` regardless of the model string.
+- `CENTRAL_PERSONA_FILE` (optional): path to a JSON overrides file for persona names, taglines, strengths, and limits. See `core/AGENTS.md` for the schema.
+- `CENTRAL_PERSONA_*` environment variables provide ad-hoc overrides (e.g. `CENTRAL_PERSONA_TAGLINE`, `CENTRAL_PERSONA_STRENGTHS`, with optional `_CENTI` suffix).
 - `CENTRAL_HELPER_ANON` (default `1`): show sanitized helper queries for safe sharing
 - `CENTRAL_REDACT_NAMES` (optional): comma-separated names to redact in helper queries
 - `CENTRAL_HELPERS` (optional): comma-separated helper names to present when choosing a helper
@@ -34,12 +37,39 @@ Central loads `.env` automatically from both the package folder and the current 
 Example `.env`:
 
 ```
-CENTRAL_LLM_URL=http://127.0.0.1:11434/api/chat
-CENTRAL_LLM_MODEL=noxllm-05b:latest
+CENTRAL_LLM_URL=http://127.0.0.1:11434/api/generate
+CENTRAL_LLM_MODEL=centi-noctics:latest
 # CENTRAL_LLM_API_KEY=sk-...
 # CENTRAL_DEV_NAME=Rei
 # NOCTICS_PROJECT_NAME=Noctics
 ```
+
+## Personalise Central
+
+Give Nox your own voice in three quick steps:
+
+1. **Tell Central which scale to bias toward** (Optional)  
+   ```bash
+   export CENTRAL_NOX_SCALE=micro  # nano|micro|milli|centi
+   ```
+2. **Drop a persona override file** with your wording. Start from the template below and save it as `config/persona.overrides.json`:
+   ```json
+   {
+     "global": {
+       "tagline": "Always-on studio co-pilot",
+       "strengths": "Keeps private briefs in sync|Checks every command before running it"
+     },
+     "scales": {
+       "micro": {
+         "central_name": "spark-nox",
+         "limits": "Prefers focused prompts over sprawling brainstorms"
+       }
+     }
+   }
+   ```
+3. **Reload overrides** (`python -c "from central.persona import reload_persona_overrides; reload_persona_overrides()"`) and start the CLI (`python main.py`). The startup HUD should now display your custom name, tagline, strengths, and limits.
+
+Need the full schema, more examples, or environment variable shortcuts? See `core/docs/PERSONA.md`.
 
 ## Core Concepts
 

@@ -9,17 +9,18 @@ logs them via SessionLogger so they appear as real memories.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
 
 from interfaces.session_logger import SessionLogger
+from central.persona import resolve_persona, render_system_prompt
 
 SYSTEM_PROMPT_PATH = Path("memory/system_prompt.txt")
 DEFAULT_SYSTEM_PROMPT = (
-    "You are **Noctics Central**, the on-device coordinator that protects the "
-    "user's privacy while orchestrating reasoning."
+    "You are {{CENTRAL_NAME}}, the {{NOX_VARIANT}} kernel safeguarding privacy while orchestrating Noctics."
 )
 
 DATASET_DIR = Path("datasets/self_improve")
@@ -165,12 +166,14 @@ SCENARIOS: List[Scenario] = [
 
 
 def load_system_prompt() -> str:
+    prompt = DEFAULT_SYSTEM_PROMPT
     if SYSTEM_PROMPT_PATH.exists():
         try:
-            return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip()
+            prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip() or DEFAULT_SYSTEM_PROMPT
         except Exception:
-            pass
-    return DEFAULT_SYSTEM_PROMPT
+            prompt = DEFAULT_SYSTEM_PROMPT
+    persona = resolve_persona(os.getenv("CENTRAL_LLM_MODEL"))
+    return render_system_prompt(prompt, persona)
 
 
 def generate_dataset_jsonl(output_path: Path) -> None:

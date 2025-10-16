@@ -1,6 +1,6 @@
 # CLI Reference
 
-The Central CLI is a thin wrapper over `central.core.ChatClient`. It supports streaming, session management, and .env loading.
+The Central CLI is a thin wrapper over `central.core.ChatClient`. Launch it with `python main.py` (or `./noctics chat`) and it will load `.env`, prompt for a user profile, and optionally restore a past session.
 
 ## Flags
 

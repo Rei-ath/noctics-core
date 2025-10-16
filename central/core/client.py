@@ -22,6 +22,7 @@ from noxl import (
 
 from ..transport import LLMTransport
 from ..connector import CentralConnector, build_connector
+from ..persona import resolve_persona
 from .helper_prompt import load_helper_prompt
 from .payloads import build_payload
 from .reasoning import clean_public_reply, extract_public_segments, strip_chain_of_thought
@@ -40,11 +41,13 @@ DEFAULT_URL = "http://127.0.0.1:11434/api/chat"
 class ChatClient:
     """Stateful chat client used by the CLI and external consumers."""
 
+    DEFAULT_URL: str = DEFAULT_URL
+
     def __init__(
         self,
         *,
         url: str | None = None,
-        model: str = os.getenv("CENTRAL_LLM_MODEL", "noctics-edge:latest"),
+        model: str = os.getenv("CENTRAL_LLM_MODEL", "centi-noctics:latest"),
         api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = -1,
@@ -85,6 +88,7 @@ class ChatClient:
         self.sanitize = sanitize
         self.messages: List[Dict[str, Any]] = list(messages or [])
         self.strip_reasoning = strip_reasoning
+        self.persona = resolve_persona(self.model)
 
         self.logger = (
             SessionLogger(
@@ -408,6 +412,10 @@ class ChatClient:
         return {
             "url": self.url,
             "model": self.model,
+            "central_name": getattr(self.persona, "central_name", None),
+            "central_scale": getattr(self.persona, "scale", None),
+            "noctics_variant": getattr(self.persona, "variant_name", None),
+            "model_target": getattr(self.persona, "model_target", None),
             "stream": bool(self.stream),
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,

@@ -34,9 +34,77 @@
 ### Build Targets
 - `scripts/build_release.sh` → standard `dist/noctics-core/` bundle.
 - `scripts/build_j_rei.sh` → personal “Nox” build with the active `.env` baked in (`dist/noctics-j-rei/`).
-- `scripts/build_edge.sh` → Gemma3 (edge) bundle (`dist/noctics-edge/`).
-- `scripts/build_ejer.sh` → Gemma3:1B bundle (`dist/noctics-ejer/`).
-All builds package the shared prompts (`memory/system_prompt.txt` and `memory/system_prompt.dev.txt`) so the assistant identifies itself as **Nox** inside Noctics (normal vs developer mode).
+- `scripts/build_edge.sh` → centi-noctics (Qwen3 8B) bundle (`dist/noctics-centi/`).
+- `scripts/build_ejer.sh` → micro-noctics (Qwen3 1.7B) bundle (`dist/noctics-ejer/`).
+All builds package the shared prompts (`memory/system_prompt.txt` and `memory/system_prompt.dev.txt`) so the assistant identifies itself as the scale-aware `*-nox` persona (normal vs developer mode).
+
+### Nox Scale Map
+
+| Scale | Central Name | Variant Alias | Model Target | Personality Snapshot |
+|-------|---------------|---------------|--------------|----------------------|
+| nano  | nano-nox      | nano-noctics  | qwen3:0.6b   | Lightning-fast heuristics and ultra-low resource footprint. |
+| micro | micro-nox     | micro-noctics | qwen3:1.7b   | Agile analyst balancing speed with deeper reasoning. |
+| milli | milli-nox     | milli-noctics | qwen3:4b     | Strategic planner for architecture and refactors. |
+| centi | centi-nox     | centi-noctics | qwen3:8b     | Flagship counselor with long-form reasoning stamina. |
+
+### Persona Personalisation
+
+Customise the assistant voice without touching source code:
+
+1. Copy the template below into `config/persona.overrides.json`.
+2. Adjust the name/tagline/strengths/limits per scale (keys are case-insensitive).
+3. Run `python -c "from central.persona import reload_persona_overrides; reload_persona_overrides()"`.
+4. Restart the CLI (`python main.py` or `./noctics chat`) and confirm the status HUD shows your phrasing.
+
+```json
+{
+  "global": {
+    "tagline": "Studio co-pilot for Rei",
+    "strengths": "Knows local dotfiles|Remembers helper etiquette"
+  },
+  "scales": {
+    "nano": {
+      "central_name": "spark-nox",
+      "limits": [
+        "Prefers concise prompts",
+        "Escalate big research to milli/centi"
+      ]
+    }
+  }
+}
+```
+
+You can also tweak individual fields on the fly:
+
+```bash
+export CENTRAL_NOX_SCALE=centi
+export CENTRAL_PERSONA_TAGLINE_CENTI="Chief of staff for long-range planning"
+export CENTRAL_PERSONA_STRENGTHS="Synthesises multi-day notes|Keeps action lists tight"
+```
+
+Central applies overrides in the following order (later entries win):
+
+1. `config/persona.overrides.json` (or any path set in `CENTRAL_PERSONA_FILE`).
+   ```json
+   {
+     "global": {"tagline": "Always-on studio co-pilot"},
+     "scales": {
+       "micro": {
+         "central_name": "spark-nox",
+         "strengths": ["Knows Rei's dotfiles", "Loves test benches"],
+         "limits": "Prefers focused prompts"
+       }
+     }
+   }
+   ```
+   Fields accept either strings or arrays; string lists are split on commas, pipes, or newlines.
+2. Environment variables (global or scale-specific):
+   - `CENTRAL_PERSONA_NAME`, `CENTRAL_PERSONA_VARIANT`, `CENTRAL_PERSONA_MODEL`, `CENTRAL_PERSONA_PARAMETERS`,
+     `CENTRAL_PERSONA_TAGLINE`, `CENTRAL_PERSONA_STRENGTHS`, `CENTRAL_PERSONA_LIMITS`
+   - Scale-specific overrides append `_<SCALE>` (e.g. `CENTRAL_PERSONA_TAGLINE_CENTI`).
+3. `CENTRAL_NOX_SCALE` selects which scale persona to load when the model string is ambiguous.
+
+For deeper examples (including troubleshooting tips), see `core/docs/PERSONA.md`.
 
 ## Development Workflow
 - Activate the env (`source jenv/bin/activate`) before linting or testing.
