@@ -22,7 +22,7 @@ Local, privacy-first chat orchestration with helper-aware streaming and session 
 Central loads `.env` automatically from both the package folder and the current working directory. Existing environment variables are not overwritten. You can also provide a JSON config via `CENTRAL_CONFIG` or `config/central.json`; see `config/central.example.json` for the schema (currently helper automation toggle and custom helper roster).
 
 - `CENTRAL_LLM_URL` (default local Ollama: `http://127.0.0.1:11434/api/generate`)
-- `CENTRAL_LLM_MODEL` (set for your endpoint; defaults to `centi-noctics:latest` in this repo)
+- `CENTRAL_LLM_MODEL` (set for your endpoint; defaults to `centi-nox` in this repo)
 - `CENTRAL_LLM_API_KEY` or `OPENAI_API_KEY` (optional)
 - `CENTRAL_NOX_SCALE` (optional): force the persona to `nano`, `micro`, `milli`, or `centi` regardless of the model string.
 - `CENTRAL_PERSONA_FILE` (optional): path to a JSON overrides file for persona names, taglines, strengths, and limits. See `core/AGENTS.md` for the schema.
@@ -38,7 +38,7 @@ Example `.env`:
 
 ```
 CENTRAL_LLM_URL=http://127.0.0.1:11434/api/generate
-CENTRAL_LLM_MODEL=centi-noctics:latest
+CENTRAL_LLM_MODEL=centi-nox
 # CENTRAL_LLM_API_KEY=sk-...
 # CENTRAL_DEV_NAME=Rei
 # NOCTICS_PROJECT_NAME=Noctics
@@ -75,10 +75,10 @@ Need the full schema, more examples, or environment variable shortcuts? See `cor
 
 | Scale  | Alias to use in configs | Upstream Model |
 |--------|-------------------------|----------------|
-| nano   | `nano-noctics:latest`   | `qwen3:0.6b`   |
-| micro  | `micro-noctics:latest`  | `qwen3:1.7b`   |
-| milli  | `milli-noctics:latest`  | `qwen3:4b`     |
-| centi  | `centi-noctics:latest`  | `qwen3:8b`     |
+| nano   | `nano-nox`              | `qwen3:0.6b`   |
+| micro  | `micro-nox`             | `qwen3:1.7b`   |
+| milli  | `milli-nox`             | `qwen3:4b`     |
+| centi  | `centi-nox`             | `qwen3:8b`     |
 
 The default release (`scripts/build_release.sh`) ships with the centi build (Qwen3 8B). Use the scale-specific scripts if you want a lighter bundle.
 

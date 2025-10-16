@@ -14,10 +14,10 @@ This guide shows how to:
 
 | Scale | Central Name | Variant Alias | Model Target | Best For |
 |-------|---------------|---------------|--------------|----------|
-| nano  | `nano-nox`    | `nano-noctics`   | `qwen3:0.6b` | Instant answers, terminal helpers, ultra-low resource devices. |
-| micro | `micro-nox`   | `micro-noctics`  | `qwen3:1.7b` | Daily driver, small refactors, tutoring with quick feedback loops. |
-| milli | `milli-nox`   | `milli-noctics`  | `qwen3:4b`   | Architecture discussions, structured planning, iterative drafting. |
-| centi | `centi-nox`   | `centi-noctics`  | `qwen3:8b`   | Long-form analysis, research synthesis, multi-branch reasoning. |
+| nano  | `nano-nox`    | `nano-nox`   | `qwen3:0.6b` | Instant answers, terminal helpers, ultra-low resource devices. |
+| micro | `micro-nox`   | `micro-nox`  | `qwen3:1.7b` | Daily driver, small refactors, tutoring with quick feedback loops. |
+| milli | `milli-nox`   | `milli-nox`  | `qwen3:4b`   | Architecture discussions, structured planning, iterative drafting. |
+| centi | `centi-nox`   | `centi-nox`  | `qwen3:8b`   | Long-form analysis, research synthesis, multi-branch reasoning. |
 
 When Central can’t infer the scale from the configured model, it falls back to `prime-nox` (adaptive defaults).
 
@@ -34,7 +34,7 @@ Central merges overrides in this order:
 ### Fields You Can Override
 
 - `central_name` – Display name (e.g. `"spark-nox"`).
-- `variant_name` – How the variant is announced (e.g. `"studio-noctics"`).
+- `variant_name` – How the variant is announced (e.g. `"studio-nox"`).
 - `model_target` – Canonical model string to mention.
 - `parameter_label` – Friendly description of the model size.
 - `tagline` – One-line summary the CLI shows in the status HUD.
@@ -61,7 +61,7 @@ Create `config/persona.overrides.json` (or point `CENTRAL_PERSONA_FILE` at any p
   "scales": {
     "micro": {
       "central_name": "spark-nox",
-      "variant_name": "spark-noctics",
+      "variant_name": "spark-nox",
       "parameter_label": "1.7B tuned for dev loops",
       "limits": "Prefers focused prompts over sprawling brainstorms"
     },

@@ -47,7 +47,7 @@ class ChatClient:
         self,
         *,
         url: str | None = None,
-        model: str = os.getenv("CENTRAL_LLM_MODEL", "centi-noctics:latest"),
+        model: str = os.getenv("CENTRAL_LLM_MODEL", "centi-nox"),
         api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = -1,

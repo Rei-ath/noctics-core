@@ -34,18 +34,18 @@
 ### Build Targets
 - `scripts/build_release.sh` → standard `dist/noctics-core/` bundle.
 - `scripts/build_j_rei.sh` → optional personal bundle that mirrors your active `.env`.
-- `scripts/build_edge.sh` → centi-noctics (Qwen3 8B) bundle (`dist/centi-noctics/`).
-- `scripts/build_ejer.sh` → micro-noctics (Qwen3 1.7B) bundle (`dist/micro-noctics/`).
+- `scripts/build_edge.sh` → centi-nox (Qwen3 8B) bundle (`dist/centi-nox/`).
+- `scripts/build_ejer.sh` → micro-nox (Qwen3 1.7B) bundle (`dist/micro-nox/`).
 All builds package the shared prompts (`memory/system_prompt.txt` and `memory/system_prompt.dev.txt`) so the assistant identifies itself as the scale-aware `*-nox` persona (normal vs developer mode).
 
 ### Nox Scale Map
 
 | Scale | Central Name | Variant Alias | Model Target | Personality Snapshot |
 |-------|---------------|---------------|--------------|----------------------|
-| nano  | nano-nox      | nano-noctics  | qwen3:0.6b   | Lightning-fast heuristics and ultra-low resource footprint. |
-| micro | micro-nox     | micro-noctics | qwen3:1.7b   | Agile analyst balancing speed with deeper reasoning. |
-| milli | milli-nox     | milli-noctics | qwen3:4b     | Strategic planner for architecture and refactors. |
-| centi | centi-nox     | centi-noctics | qwen3:8b     | Flagship counselor with long-form reasoning stamina. |
+| nano  | nano-nox      | nano-nox  | qwen3:0.6b   | Lightning-fast heuristics and ultra-low resource footprint. |
+| micro | micro-nox     | micro-nox | qwen3:1.7b   | Agile analyst balancing speed with deeper reasoning. |
+| milli | milli-nox     | milli-nox | qwen3:4b     | Strategic planner for architecture and refactors. |
+| centi | centi-nox     | centi-nox | qwen3:8b     | Flagship counselor with long-form reasoning stamina. |
 
 ### Persona Personalisation
 

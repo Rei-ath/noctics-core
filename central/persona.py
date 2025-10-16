@@ -77,7 +77,7 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
     "nano": NoxPersona(
         scale="nano",
         central_name="nano-nox",
-        variant_name="nano-noctics",
+        variant_name="nano-nox",
         model_target="qwen3:0.6b",
         parameter_label="0.6B parameters",
         tagline="Lightning-fast microkernel tuned for reflexive answers and ambient automation.",
@@ -94,7 +94,7 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
     "micro": NoxPersona(
         scale="micro",
         central_name="micro-nox",
-        variant_name="micro-noctics",
+        variant_name="micro-nox",
         model_target="qwen3:1.7b",
         parameter_label="1.7B parameters",
         tagline="Agile analyst that balances speed with richer reasoning and grounded guidance.",
@@ -111,7 +111,7 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
     "milli": NoxPersona(
         scale="milli",
         central_name="milli-nox",
-        variant_name="milli-noctics",
+        variant_name="milli-nox",
         model_target="qwen3:4b",
         parameter_label="4B parameters",
         tagline="Steady strategist with room for richer context, design exploration, and refactors.",
@@ -128,7 +128,7 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
     "centi": NoxPersona(
         scale="centi",
         central_name="centi-nox",
-        variant_name="centi-noctics",
+        variant_name="centi-nox",
         model_target="qwen3:8b",
         parameter_label="8B parameters",
         tagline="Flagship counselor with deep reasoning, enriched memory, and creative stamina.",

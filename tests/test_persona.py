@@ -18,7 +18,7 @@ def test_resolve_persona_env_override(monkeypatch):
 
 
 def test_render_system_prompt_is_idempotent():
-    persona = resolve_persona("centi-noctics:latest")
+    persona = resolve_persona("centi-nox")
     template = "Name {{CENTRAL_NAME}}\n{{NOX_PERSONA_STRENGTHS}}\n{{NOX_PERSONA_EMOJI}}"
     rendered = render_system_prompt(template, persona)
     assert "{{" not in rendered
