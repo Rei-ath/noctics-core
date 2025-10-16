@@ -71,6 +71,17 @@ Give Nox your own voice in three quick steps:
 
 Need the full schema, more examples, or environment variable shortcuts? See `core/docs/PERSONA.md`.
 
+### Bundled Model Cheatsheet
+
+| Scale  | Alias to use in configs | Upstream Model |
+|--------|-------------------------|----------------|
+| nano   | `nano-noctics:latest`   | `qwen3:0.6b`   |
+| micro  | `micro-noctics:latest`  | `qwen3:1.7b`   |
+| milli  | `milli-noctics:latest`  | `qwen3:4b`     |
+| centi  | `centi-noctics:latest`  | `qwen3:8b`     |
+
+The default release (`scripts/build_release.sh`) ships with the centi build (Qwen3 8B). Use the scale-specific scripts if you want a lighter bundle.
+
 ## Core Concepts
 
 - ChatClient (importable): stateful conversation + streaming + helper stitching + logging
