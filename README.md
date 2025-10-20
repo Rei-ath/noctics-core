@@ -173,6 +173,8 @@ First prompt: When you start the CLI it asks for your username (unless `--dev` i
 
 Most commands accept `--root PATH` so you can target alternate directories (like `memory/early-archives`).
 
+The CLI now runs standalone from the `noctics-core` package; colour output and display-name helpers gracefully fall back when richer dependencies are absent.
+
 More details: `docs/SESSIONS.md`.
 
 ## Programmatic Use

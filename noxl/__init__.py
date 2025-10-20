@@ -24,8 +24,7 @@ from .sessions import (
     set_session_title_for,
     user_meta_for_path,
 )
-from central.colors import color
-from interfaces.session_logger import format_session_display_name
+from ._compat import color, format_session_display_name
 
 
 def load_meta(log_path: Path) -> Dict[str, Any]:

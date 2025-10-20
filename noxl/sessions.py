@@ -7,8 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from interfaces.paths import resolve_memory_root, resolve_sessions_root, resolve_users_root
-from interfaces.session_logger import format_session_display_name
+from ._compat import (
+    format_session_display_name,
+    resolve_memory_root,
+    resolve_sessions_root,
+    resolve_users_root,
+)
 
 SESSION_ROOT = resolve_sessions_root()
 ARCHIVE_ROOT = resolve_memory_root() / "early-archives"
