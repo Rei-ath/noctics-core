@@ -59,6 +59,7 @@ Env toggles:
 ```text
 CENTRAL_HELPERS, CENTRAL_INSTRUMENTS   # explicitly list helper names
 CENTRAL_HELPER_AUTOMATION              # turn automation on (1/true/on)
+CENTRAL_INSTRUMENT_PLUGINS             # comma list of modules that call register_instrument
 CENTRAL_INSTRUMENT_ANON                # hide helper prompts when logging
 CENTRAL_REDACT_NAMES                   # comma list of names to scrub
 ```

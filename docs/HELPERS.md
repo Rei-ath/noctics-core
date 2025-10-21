@@ -32,6 +32,12 @@ Rosters come from:
   ```
 - `--anon-instrument` (aliases respect `CENTRAL_INSTRUMENT_ANON`) keeps identifiers vague when logging.
 
+## Built-in providers
+- **OpenAI** – Models starting with `gpt`, `o1`, or URLs hitting `api.openai.com`.
+- **Anthropic** – Any `claude-*`, `haiku`, or `sonnet` models, plus `api.anthropic.com`.
+- More? Drop a plugin that imports `instruments.register_instrument` and call it with your class. Set
+  `CENTRAL_INSTRUMENT_PLUGINS="your_module,another_module"` to auto-import on startup.
+
 ## Automation story
 1. Central explains why an instrument is needed and prints the sanitized query.
 2. Automation off (default): you get instructions to run it yourself.
