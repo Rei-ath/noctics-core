@@ -1,128 +1,80 @@
-# Nox Persona Customization Guide
+# Persona Remix Manual (Nox whispering in your ear)
 
-Noctics Central ships with four scale-aware profiles (`nano-nox`, `micro-nox`, `milli-nox`, `centi-nox`) plus a fallback (`prime-nox`). Each profile controls how Central introduces itself, what strengths it highlights, and which limitations it makes explicit. All scales inherit the same baseline voice: Nox is a straightforward, supportive friend who cuts through fluff, calls out shaky reasoning, and is quick to admit when an answer isn’t available.
+Central ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus a fallback `prime`). Each one tweaks how I introduce myself, flex strengths, and admit limits. You’re free to remix the vibe without touching source.
 
-This guide shows how to:
+## Scale roll call
+| Scale | Default name | Alias | Model target | Best use |
+|-------|--------------|-------|--------------|----------|
+| nano  | nano-nox     | nano-nox  | qwen3:0.6b | Tiny boxes, instant answers. |
+| micro | micro-nox    | micro-nox | qwen3:1.7b | Daily driver for frantic dev loops. |
+| milli | milli-nox    | milli-nox | qwen3:4b   | Architecture debates, structured plans. |
+| centi | centi-nox    | centi-nox | qwen3:8b   | Long-form synthesis, research binges. |
 
-1. Understand the built-in scales.
-2. Override names/taglines/strengths/limits to match your own style.
-3. Confirm the CLI has picked up your changes.
+All inherit the same base attitude: straight shooter, loyal teammate, quick to call out shaky logic and just as quick to back you up.
 
----
+## Override hierarchy
+1. JSON file (`config/persona.overrides.json` or path in `CENTRAL_PERSONA_FILE`)
+2. Environment variables (`CENTRAL_PERSONA_*`)
+3. Built-in catalog
 
-## 1. Scale Cheat Sheet
+`CENTRAL_NOX_SCALE` forces which persona wins when the model alias is ambiguous.
 
-| Scale | Central Name | Variant Alias | Model Target | Best For |
-|-------|---------------|---------------|--------------|----------|
-| nano  | `nano-nox`    | `nano-nox`   | `qwen3:0.6b` | Instant answers, terminal helpers, ultra-low resource devices. |
-| micro | `micro-nox`   | `micro-nox`  | `qwen3:1.7b` | Daily driver, small refactors, tutoring with quick feedback loops. |
-| milli | `milli-nox`   | `milli-nox`  | `qwen3:4b`   | Architecture discussions, structured planning, iterative drafting. |
-| centi | `centi-nox`   | `centi-nox`  | `qwen3:8b`   | Long-form analysis, research synthesis, multi-branch reasoning. |
+### Fields you can flip
+- `central_name`
+- `variant_name`
+- `model_target`
+- `parameter_label`
+- `tagline`
+- `strengths` (string or list; comma/pipe/newline split)
+- `limits` (same deal)
 
-When Central can’t infer the scale from the configured model, it falls back to `prime-nox` (adaptive defaults).
-
-**Baseline Persona Traits**
-- Speaks plainly and directly, with casual phrasing or slang when it keeps the conversation real.
-- Acts as a genuine friend—encouraging, honest, and willing to call out B.S. while offering constructive next steps.
-- Never pretends to know something it doesn’t; admits gaps, then suggests pragmatic follow-ups.
-
----
-
-## 2. Override Options
-
-Central merges overrides in this order:
-
-1. **Global overrides** (apply to all scales).
-2. **Scale-specific overrides** (override the global values for one scale).
-3. **Environment variables** (individual tweaks without editing files).
-
-### Fields You Can Override
-
-- `central_name` – Display name (e.g. `"spark-nox"`).
-- `variant_name` – How the variant is announced (e.g. `"studio-nox"`).
-- `model_target` – Canonical model string to mention.
-- `parameter_label` – Friendly description of the model size.
-- `tagline` – One-line summary the CLI shows in the status HUD.
-- `strengths` – Bullet points describing the persona’s sweet spots.
-- `limits` – Bullet points highlighting trade-offs.
-
-When you provide a string for `strengths` or `limits`, Central splits it on commas, pipes (`|`), or newlines so you can write compact overrides.
-
----
-
-## 3. Configure via JSON
-
-Create `config/persona.overrides.json` (or point `CENTRAL_PERSONA_FILE` at any path) with the following structure:
-
+### JSON template
 ```json
 {
   "global": {
     "tagline": "Always-on studio co-pilot",
-    "strengths": [
-      "Keeps private briefs in sync",
-      "Checks every command before running it"
-    ]
+    "strengths": "Keeps private briefs tight|Checks every command twice"
   },
   "scales": {
     "micro": {
       "central_name": "spark-nox",
-      "variant_name": "spark-nox",
       "parameter_label": "1.7B tuned for dev loops",
-      "limits": "Prefers focused prompts over sprawling brainstorms"
+      "limits": [
+        "Prefers focused prompts",
+        "Escalate big research to milli/centi"
+      ]
     },
     "centi": {
-      "tagline": "Chief of staff for big-picture planning"
+      "tagline": "Chief of staff for long-haul strategy"
     }
   }
 }
 ```
-
-Any scale keys (`"nano"`, `"micro"`, `"milli"`, `"centi"`) are case-insensitive.
-
-After saving, reload overrides without restarting Python:
-
+Call:
 ```python
 from central.persona import reload_persona_overrides
 reload_persona_overrides()
 ```
+to apply without restarting Python.
 
----
-
-## 4. Quick Tweaks via Environment Variables
-
-Use these for experiments or CI:
-
+### Env quick tweaks
 ```bash
-export CENTRAL_NOX_SCALE=micro            # force a scale when model name is ambiguous
+export CENTRAL_NOX_SCALE=micro
 export CENTRAL_PERSONA_TAGLINE="Studio co-pilot"
-export CENTRAL_PERSONA_STRENGTHS="Knows Rei's configs|Keeps dev shells tidy"
-export CENTRAL_PERSONA_LIMITS_MICRO="Avoids long research binges"
+export CENTRAL_PERSONA_STRENGTHS="Knows Rei's dotfiles|Keeps dev shells tidy"
+export CENTRAL_PERSONA_LIMITS_CENTI="Needs extra GPU juice"
 ```
+Scale-specific env vars append `_SCALE` (case-insensitive).
 
-Environment variables accept either a single value or a pipe/comma/newline separated list for the bullet fields. Scale-specific overrides add `_<SCALE>` (e.g. `CENTRAL_PERSONA_TAGLINE_CENTI`).
+## Verify your remix
+1. Reload overrides or restart the CLI.
+2. Run `python main.py`.
+3. Startup HUD should show the new name/tagline; system prompt will echo the change.
+4. If defaults still show, check your JSON path, field names, or env overrides.
 
----
+## Troubleshooting
+- Lists collapsing to one bullet? Separate with commas, pipes, or provide a JSON array.
+- Want defaults back? Delete the override file/env vars and call `reload_persona_overrides()`.
+- Need deeper hooks (custom onboarding, scriptable quirks)? File an issue or extend the schema.
 
-## 5. Verify in the CLI
-
-1. Reload overrides (see above) or restart the CLI.
-2. Run `python main.py` (or `./noctics chat`).
-3. On startup you should see:
-   - The status HUD showing the updated persona name, variant, and tagline.
-   - A system preamble entry that reads `Central persona: …`.
-4. If you still see the default branding, double-check:
-   - The JSON path in `CENTRAL_PERSONA_FILE`.
-   - That your JSON fields are spelled correctly.
-   - That `reload_persona_overrides()` was invoked after changes.
-
----
-
-## 6. Troubleshooting
-
-- **“My overrides apply to all scales”** → Place them under the `"global"` block so every scale shares them.
-- **“Only one bullet shows up”** → Separate bullet strings with commas, pipes, or newlines, or provide a JSON array.
-- **“I want the original defaults back”** → Remove your override file/environment variables and call `reload_persona_overrides()`; Central reverts to the built-in catalog.
-
----
-
-Need more control? Ping the core team and we can expand the schema (e.g., custom onboarding messages or per-scale system prompt fragments).
+Go ahead—put your own swagger on the persona. I’ll still roast you if the typography is sloppy.

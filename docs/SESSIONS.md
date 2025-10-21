@@ -1,71 +1,66 @@
-# Sessions & Titles
+# Session Vault Manual (keep receipts like Nox)
 
-Central logs every session to JSONL and writes a companion meta file that tracks title and other metadata.
+Central logs every turn so you never lose a thread. Here’s how the vault works and how to boss it around.
 
-## Files
+## Where everything lives
+- Default root: `~/.local/share/noctics/memory/`
+- Sessions: `sessions/YYYY-MM-DD/session-*.jsonl`
+- Metadata: `session-*.meta.json`
+- Day rollup: `day.json`
+- Archives live under `early-archives/`
 
-- By default, session files live under `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/` (override with `NOCTICS_MEMORY_HOME`).
-- `session-*.jsonl`: JSON Lines turn records (legacy `.json` files remain compatible)
-- `session-*.meta.json`: session metadata (id, path, turns, created, updated, title, custom)
-- `day.json`: aggregate of every session saved that day (deduplicated on session close)
+Set `NOCTICS_MEMORY_HOME` if you want to park the vault somewhere else. On first run, legacy `memory/` content inside the repo gets migrated automatically.
 
-## Titles
+## File anatomy
+- `session-20250101-010203.jsonl` → turn-by-turn log
+- `session-20250101-010203.meta.json` → id, title, created/updated, custom flag, helper info
+- `day.json` → deduped summary for the day
 
-- Set a title manually:
+## Titles & naming rights
+- Auto-title fires when a session ends with no custom title—pulled from the first meaningful user message.
+- Manual options:
   - In chat: `/title My Topic`
-  - Non-interactive: `python main.py --sessions-rename session-YYYYMMDD-HHMMSS "My Topic"`
-- Auto-title:
-  - If no custom title is set, Central derives a short title from the first meaningful user message at the end of the session
-- Rename saved sessions:
-  - In chat: `/rename session-YYYYMMDD-HHMMSS New Title`
-  - Non-interactive: `--sessions-rename ...`
+  - CLI flag: `python main.py --sessions-rename session-YYYYMMDD-HHMMSS "My Topic"`
+- Rename saved sessions later with `/rename` or `--sessions-rename`.
+- Central can self-rename mid-chat via `[SET TITLE]New Name[/SET TITLE]`.
 
-## Listing & Loading
+## Listing, loading, archiving
+| Action | Command |
+|--------|---------|
+| List sessions | `python main.py --sessions-ls` or `/sessions` |
+| Latest summary | `python main.py --sessions-latest` or `/last` |
+| Pretty-print | `python main.py --sessions-show ID` or `/show ID` |
+| Browse picker | `python main.py --sessions-browse` or `/browse` |
+| Load as context | `python main.py --sessions-load ID` or `/load [ID]` |
+| Archive old runs | `python main.py --sessions-archive-early` or `/archive` |
+| Merge multiple | `python main.py --sessions-merge A B` or `/merge A B` |
 
-- List with titles:
-  - `python main.py --sessions-ls`
-  - `python main.py --sessions-latest` (quick summary of the most recent session)
-  - Or in chat: `/sessions` or `/ls`
-- Show only the most recent session in chat: `/last`
-- Pretty-print a session without loading it: `python main.py --sessions-show session-YYYYMMDD-HHMMSS` or `/show ID`
-- Interactively browse & view sessions: `python main.py --sessions-browse` or `/browse`
-- Archive everything but the latest session into `~/.local/share/noctics/memory/early-archives/`:
-  - `python main.py --sessions-archive-early`
-  - Or in chat: `/archive`
-- Load a session as the starting context:
-  - `python main.py --sessions-load session-YYYYMMDD-HHMMSS`
-  - Or in chat: `/load` (interactive picker) or `/load ID`
+Loading reinstates the turns and starts a new live session; it doesn’t append to the old file.
 
-## Inspecting with `noxl`
+## `noxl` toolbox
+```bash
+python -m noxl --limit 10
+python -m noxl --search "memory leak"
+python -m noxl --show session-20250101-010203 --raw
+python -m noxl rename session-20250101-010203 "Prod Outage Retro"
+python -m noxl merge session-A session-B --title "Combo Tape"
+python -m noxl archive
+python -m noxl meta session-20250101-010203
+python -m noxl count --search helper
+```
+Add `--root PATH` to poke alternate directories (imports, archives, etc.).
 
-- List recent sessions: `python -m noxl` (use `--limit N` to change the count)
-- Search metadata/content: `python -m noxl --search "keyword"`
-- Inspect another root (e.g., archives): `python -m noxl list --root ~/.local/share/noctics/memory/early-archives`
-- Show latest summary: `python -m noxl --latest`
-- Pretty-print a session: `python -m noxl --show session-YYYYMMDD-HHMMSS`
-- Dump raw JSON messages: `python -m noxl --show <id> --raw`
-- Rename a session title: `python -m noxl rename session-YYYYMMDD-HHMMSS "New Title"`
-- Merge multiple sessions: `python -m noxl merge A B --title "Merged Title"`
-- Archive earlier sessions: `python -m noxl archive`
-- View stored metadata: `python -m noxl meta session-YYYYMMDD-HHMMSS`
-- Count matches: `python -m noxl count --search helper`
-- Library usage: `from noxl import list_sessions, load_session_messages, compute_title_from_messages`
+Programmatic helpers:
+```python
+from noxl import list_sessions, load_session_messages, compute_title_from_messages
+```
 
-Tip: supply `--root PATH` (e.g., `--root ~/.local/share/noctics/memory/early-archives`) to operate on alternate session directories.
+## Merge behavior
+- Keeps the first system message, then concatenates user/assistant turns in order.
+- New session lands under the normal root with a title like `Merged: A | B`.
+- Rename later if you hate the default.
 
-## Merging
+## Telemetry heads-up
+CLI run metrics live in `memory/telemetry/metrics.json` (run counts, timestamps, per-version totals). Nothing leaves the machine unless you send it.
 
-- Combine multiple sessions into a new merged session (keeps first system, concatenates user/assistant pairs):
-  - Non-interactive: `python main.py --sessions-merge ID_OR_INDEX [ID_OR_INDEX ...]`
-  - Interactive: `/merge ID_OR_INDEX [ID_OR_INDEX ...]`
-  - Examples:
-    - `python main.py --sessions-merge 1 3`
-    - In chat: `/merge session-20250913-234409 session-20250914-010016`
-
-Notes:
-- The merged session is saved under the sessions root (for example `~/.local/share/noctics/memory/sessions/merged-<date>/`) with a meta title like `Merged: A | B | C`.
-- You can rename the merged session later with `--sessions-rename` or `/rename`.
-
-Notes:
-- Loading reconstructs the conversation and starts a new live session; it does not append to the old file.
-- Meta files are updated on every turn write and when titles change.
+Stay organized and I’ll always have context the next time you ping me at 3 AM.
