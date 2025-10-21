@@ -226,7 +226,7 @@ class SessionLogger:
         return self._file
 
     # -----------------
-    # User-aware helpers
+    # User-aware utilities
     # -----------------
 
     def _resolve_session_root(self) -> Path:

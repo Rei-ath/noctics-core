@@ -19,8 +19,8 @@ greets you, offers to restore a session, and then gets out of the way.
 | `--raw` | In non-stream mode, also dump the raw JSON response. |
 | `--show-think` | Leak `<think>` reasoning blocks instead of hiding them. |
 | `--api-key` / `-k` | Direct API key (`CENTRAL_LLM_API_KEY` / `OPENAI_API_KEY`). |
-| `--instrument` (`--helper`) | Set the label for external helpers (“claude”, “gpt-4o”, etc.). |
-| `--anon-instrument` / `--no-anon-instrument` | Toggle sanitized helper queries (default obeys env). |
+| `--instrument` | Set the label for external instruments (“claude”, “gpt-4o”, etc.). |
+| `--anon-instrument` / `--no-anon-instrument` | Toggle sanitized instrument queries (default obeys env). |
 | `--user-name` | Change the prompt label (“You” by default, overridable via `CENTRAL_USER_NAME`). |
 | `--dev` | Unlock developer mode (passphrase-gated). |
 | `--sessions-*` | All the session management tricks: list, load, rename, merge, latest, archive, browse, show. |
@@ -30,7 +30,7 @@ greets you, offers to restore a session, and then gets out of the way.
 
 | Command | Action |
 |---------|--------|
-| `/helper NAME` | Set helper label (`/helper` alone clears it). |
+| `/instrument NAME` | Set instrument label (repeat to change or clear). |
 | `/sessions` / `/ls` | List saved sessions. |
 | `/last` | Show the most recent session summary. |
 | `/archive` | Sweep older sessions into `memory/early-archives/`. |
@@ -45,7 +45,7 @@ greets you, offers to restore a session, and then gets out of the way.
 | `/reset` | Drop back to just the system prompt. |
 | `exit`, `quit`, `Ctrl+C` | You know what these do. |
 
-Tab completion is live for commands, helper names, and session ids/indices.
+Tab completion is live for commands, instrument names, and session ids/indices.
 
 ## Instrument flow (how the magic routes)
 1. Central answers locally first.
@@ -57,10 +57,10 @@ Tab completion is live for commands, helper names, and session ids/indices.
 
 Env toggles:
 ```text
-CENTRAL_HELPERS, CENTRAL_INSTRUMENTS   # explicitly list helper names
-CENTRAL_HELPER_AUTOMATION              # turn automation on (1/true/on)
+CENTRAL_INSTRUMENTS                   # explicitly list instrument names
+CENTRAL_INSTRUMENT_AUTOMATION         # turn automation on (1/true/on)
 CENTRAL_INSTRUMENT_PLUGINS             # comma list of modules that call register_instrument
-CENTRAL_INSTRUMENT_ANON                # hide helper prompts when logging
+CENTRAL_INSTRUMENT_ANON                # hide instrument prompts when logging
 CENTRAL_REDACT_NAMES                   # comma list of names to scrub
 ```
 
@@ -69,7 +69,7 @@ CENTRAL_REDACT_NAMES                   # comma list of names to scrub
 - Central can emit `[DEV SHELL COMMAND]` blocks—CLI executes them and logs the `[DEV SHELL RESULT]`
 - `/shell <cmd>` available for manual runs
 - Identity label marks you as the developer (default: Rei)
-- Hardware stats + helper roster get stapled onto the system prompt
+- Hardware stats + instrument roster get stapled onto the system prompt
 
 Passphrase order: `CENTRAL_DEV_PASSPHRASE`, config value, then default `jx0`.
 
@@ -99,7 +99,7 @@ Set `NOCTICS_MEMORY_HOME` if you want a different root. Legacy repo-stored sessi
 ## Memory explorer (`noxl`) crash course
 ```bash
 python -m noxl --limit 10
-python -m noxl --search "helper"
+python -m noxl --search "instrument"
 python -m noxl --show session-20250101-010203 --raw
 python -m noxl rename session-20250101-010203 "Postmortem"
 python -m noxl merge session-A session-B --title "Combo Tape"
@@ -115,7 +115,7 @@ Use `--root PATH` to point at alternate directories like `memory/early-archives`
 Example JSON:
 ```json
 {
-  "helper": {
+  "instrument": {
     "automation": false,
     "roster": ["claude", "gpt-4o"]
   }
@@ -124,8 +124,8 @@ Example JSON:
 
 ## Quick combos
 ```bash
-# Stream with helper label
-python main.py --stream --helper claude
+# Stream with instrument label
+python main.py --stream --instrument claude
 
 # Batch question, show reasoning, dump raw JSON
 python main.py --user "Explain vector clocks" --no-stream --show-think --raw

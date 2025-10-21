@@ -31,13 +31,13 @@ fresh.
   `inference`, `interfaces`, `noxl`).
 - `central/cli/` – argument parsing, interactive shell, onboarding flow.
 - `central/core/` – `ChatClient`, payload mixers, reasoning filters.
-- `central/commands/` – sessions, instruments, helper prompts.
+- `central/commands/` – sessions, instruments, prompt orchestration.
 - `interfaces/` – dotenv loader, PII scrubber, session logger.
 - `noxl/` – memory spelunker CLI + APIs.
 - `memory/` – prompt templates (`system_prompt.md`, `system_prompt.dev.md`).
 - `scripts/` – everything from submodule sync to release rituals.
 - `tests/` – pytest suite; if you touch behavior, add coverage.
-- `instruments/` – SDK-backed helpers. Start with OpenAI, add your own.
+- `instruments/` – SDK-backed instruments. Start with OpenAI, add your own.
 
 ## Build rituals
 | Script | Why you care |
@@ -79,10 +79,10 @@ model alias is ambiguous.
 - Binary smoke test: hide `core/`, leave `core_pyd/` on `PYTHONPATH`, and run
   `python -c "from central.core import ChatClient"`
 
-## Runtime & helper behavior
-- Central self-scores replies; score ≤ 5 triggers helper requests.
+## Runtime & instrument behavior
+- Central self-scores replies; score ≤ 5 triggers instrument requests.
 - `[INSTRUMENT QUERY]` is sanitized; automation only activates when
-  `CENTRAL_HELPER_AUTOMATION` or config says so.
+  `CENTRAL_INSTRUMENT_AUTOMATION` or config says so.
 - Dev mode (passphrase-gated) unlocks `/shell`, detailed HUD, and developer identity tagging.
 - `--show-think` exposes reasoning blocks; otherwise they’re stripped before logging.
 
@@ -95,7 +95,7 @@ model alias is ambiguous.
 ## Security ops
 - No secrets in history—use `.env` files or runtime export.
 - Refresh `inference/ollama` via `scripts/nox.run` when LayMA ships a new binary.
-- Validate any external helper response before storing or streaming it.
+- Validate any external instrument response before storing or streaming it.
 - Release builds bundle everything; `scripts/prepare_assets.sh` sets up models and
   records active digests.
 

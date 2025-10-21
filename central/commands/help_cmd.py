@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from central.colors import color
 from central.core import ChatClient
-from central.commands.helper import describe_helper_status
+from central.commands.instrument import describe_instrument_status
 
 
 def print_help(client: ChatClient, *, user_name: str = "You") -> None:
@@ -12,8 +12,8 @@ def print_help(client: ChatClient, *, user_name: str = "You") -> None:
         print(color(f"Logging session to: {lp}", fg="yellow"))
     print(color("Commands:", fg="yellow"))
     print(color("  /help          show this help", fg="yellow"))
-    print(color("  /instrument NAME   set instrument label (alias: /helper)", fg="yellow"))
-    print(color("  /instrument        clear instrument label (alias: /helper)", fg="yellow"))
+    print(color("  /instrument NAME   set instrument label", fg="yellow"))
+    print(color("  /instrument        clear instrument label", fg="yellow"))
     print(color("  /shell CMD     run a local shell command (developer mode only)", fg="yellow"))
     print(color("  /iam NAME      mark yourself as the developer for this session", fg="yellow"))
     print(color("  /ls            list saved sessions with titles", fg="yellow"))
@@ -26,10 +26,10 @@ def print_help(client: ChatClient, *, user_name: str = "You") -> None:
     print(color("  /merge A B..   merge sessions by ids or indices", fg="yellow"))
     print(color("  /reset         reset context to just the system message", fg="yellow"))
     print(color("  /name NAME     set the input prompt label (default: You)", fg="yellow"))
-    print(color("  /anon          reserved helper sanitization toggle", fg="yellow"))
-    print(color("Docs: README.md, docs/CLI.md, docs/SESSIONS.md, docs/HELPERS.md (instruments)", fg="yellow"))
+    print(color("  /anon          reserved instrument sanitization toggle", fg="yellow"))
+    print(color("Docs: README.md, docs/CLI.md, docs/SESSIONS.md, docs/INSTRUMENTS.md", fg="yellow"))
     print(color("Tip: run with --help to see all CLI flags.", fg="yellow"))
-    print(color(f"Instruments: {describe_helper_status()}", fg="yellow"))
+    print(color(f"Instruments: {describe_instrument_status()}", fg="yellow"))
     print()
     print(color("Examples:", fg="yellow", bold=True))
     print(color("  python main.py --stream", fg="yellow"))

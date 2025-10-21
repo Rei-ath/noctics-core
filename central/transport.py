@@ -39,7 +39,7 @@ class LLMTransport:
         return self._request_json(req)
 
     # -----------------
-    # Internal helpers
+    # Internal utilities
     # -----------------
     def _headers(self, *, stream: bool = False) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}

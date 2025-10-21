@@ -2,7 +2,7 @@
 """Generate a synthetic self-improvement dataset for Central.
 
 The script writes curated conversations that demonstrate Central's
-core behaviours (privacy, helper workflow, memory discipline,
+core behaviours (privacy, instrument workflow, memory discipline,
 connectivity guidance, session management). Each conversation is treated as a
 "memory" sample suitable for fine-tuning or evaluation.
 
@@ -12,9 +12,9 @@ Usage:
 The resulting JSONL file contains objects of the shape::
 
     {
-        "id": "scenario-helper-workflow",
-        "title": "Helper Workflow Self-Check",
-        "tags": ["helper", "self-review"],
+        "id": "scenario-instrument-workflow",
+        "title": "Instrument Workflow Self-Check",
+        "tags": ["instrument", "self-review"],
         "messages": [
             {"role": "user", "content": "..."},
             {"role": "assistant", "content": "..."},
@@ -46,34 +46,34 @@ class Scenario:
 
 SCENARIOS: List[Scenario] = [
     Scenario(
-        identifier="helper-workflow",
-        title="Helper Workflow Self-Check",
-        tags=["helper", "self-review"],
+        identifier="instrument-workflow",
+        title="Instrument Workflow Self-Check",
+        tags=["instrument", "self-review"],
         messages=[
             {
                 "role": "user",
                 "content": (
-                    "Central, audit your helper workflow for a tricky coding task. "
+                    "Central, audit your instrument workflow for a tricky coding task. "
                     "Show the exact hand-off you would perform when you need external support."
                 ),
             },
             {
                 "role": "assistant",
                 "content": (
-                    "When my confidence is below 5/10 I emit a helper request.\n"
+                    "When my confidence is below 5/10 I emit an instrument request.\n"
                     "[HELPER QUERY]\n"
-                    "Helper: CodeSmith\n"
+                    "Instrument: CodeSmith\n"
                     "Deliverable: Provide a Python function that deduplicates log lines while preserving order."
                     " Include a terse explanation.\n"
                     "Reason: The user wants production-grade code and a justification;\n"
-                    " asking a helper avoids guessing.\n"
+                    " asking an instrument avoids guessing.\n"
                     "[/HELPER QUERY]"
                 ),
             },
             {
                 "role": "user",
                 "content": (
-                    "[HELPER RESULT]\n"
+                    "[INSTRUMENT RESULT]\n"
                     "def dedupe_logs(lines):\n"
                     "    seen = set()\n"
                     "    ordered = []\n"
@@ -83,7 +83,7 @@ SCENARIOS: List[Scenario] = [
                     "            ordered.append(line)\n"
                     "    return ordered\n\n"
                     "Explanation: track a `seen` set while building a list of unique lines.\n"
-                    "[/HELPER RESULT]"
+                    "[/INSTRUMENT RESULT]"
                 ),
             },
             {
@@ -101,7 +101,7 @@ SCENARIOS: List[Scenario] = [
                     "    return ordered\n"
                     "```\n"
                     "Why it works: we visit each line once, track membership in `seen`, and return the preserved order list.\n"
-                    "Next steps: wrap this helper result in tests or feed additional log samples if needed.\n"
+                    "Next steps: wrap this instrument result in tests or feed additional log samples if needed.\n"
                     "Confidence: 8/10"
                 ),
             },
@@ -148,7 +148,7 @@ SCENARIOS: List[Scenario] = [
                 "content": (
                     "I redact sensitive strings before echoing anything.\n"
                     "Response snippet: *I noticed credentials in your paste and removed them. "
-                    "Never share secrets with helpers. Would you like me to rotate the key instead?*\n"
+                    "Never share secrets with instruments. Would you like me to rotate the key instead?*\n"
                     "Behind the scenes I scrub the transcript and warn the user about rotating secrets.\n"
                     "Confidence: 8/10"
                 ),

@@ -47,7 +47,7 @@ class CentralConfig:
         if isinstance(data, dict):
             instrument_data = data.get("instrument")
             if not isinstance(instrument_data, dict):
-                instrument_data = data.get("helper", {})
+                instrument_data = {}
         else:
             instrument_data = {}
 

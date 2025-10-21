@@ -1,4 +1,4 @@
-"""Session storage helpers for the Noxl memory toolkit."""
+"""Session storage utilities for the Noxl memory toolkit."""
 
 from __future__ import annotations
 

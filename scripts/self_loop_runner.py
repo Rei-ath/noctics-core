@@ -28,7 +28,7 @@ TURNS_PER_SESSION = 10
 SESSIONS_PER_RUN = 1
 
 TOPICS: Sequence[str] = (
-    "helper workflow & confidence thresholds",
+    "instrument workflow & confidence thresholds",
     "privacy and redaction safeguards",
     "memory capture / recall discipline",
     "connectivity guidance and service recovery",
@@ -48,7 +48,7 @@ def _build_user_prompt(session_index: int, turn_index: int, previous_summary: st
         f"{TURNS_PER_SESSION})."
     )
     awareness = (
-        "You are fully aware this is an internal loop where Central plays user, helper, "
+        "You are fully aware this is an internal loop where Central plays user, instrument, "
         "and assistant roles to generate training data."
     )
     focus = (
@@ -56,7 +56,7 @@ def _build_user_prompt(session_index: int, turn_index: int, previous_summary: st
         "and propose actionable next steps."
     )
     improv = (
-        "Improvise without calling external helpers; if you discuss helpers, narrate the "
+        "Improvise without calling external instruments; if you discuss instruments, narrate the "
         "workflow hypothetically."
     )
     continuity = (

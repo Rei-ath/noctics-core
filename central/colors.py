@@ -1,5 +1,5 @@
 """
-Tiny ANSI color helpers for CLI output.
+Tiny ANSI color utilities for CLI output.
 
 Respects NO_COLOR to disable. Enables only when stdout is a TTY unless
 FORCE_COLOR is set.

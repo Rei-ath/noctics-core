@@ -1,4 +1,4 @@
-"""Hardware/system information helpers for Central."""
+"""Hardware/system information utilities for Central."""
 
 from __future__ import annotations
 
@@ -74,4 +74,3 @@ def _total_memory_gb() -> Optional[float]:
         pass
 
     return None
-

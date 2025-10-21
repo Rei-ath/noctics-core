@@ -23,7 +23,7 @@ from noxl import (
 from ..transport import LLMTransport
 from ..connector import CentralConnector, build_connector
 from ..persona import resolve_persona
-from .helper_prompt import load_helper_prompt
+from .instrument_prompt import load_instrument_prompt
 from .payloads import build_payload
 from .reasoning import clean_public_reply, extract_public_segments, strip_chain_of_thought
 
@@ -180,7 +180,7 @@ class ChatClient:
             raise URLError(message)
 
     # ---------------------
-    # Message/state helpers
+    # Message/state utilities
     # ---------------------
     def reset_messages(self, system: Optional[str] = None) -> None:
         self.messages = []
@@ -191,7 +191,7 @@ class ChatClient:
         self.messages = list(messages)
 
     # ---------------------
-    # Session title helpers
+    # Session title utilities
     # ---------------------
     def get_session_title(self) -> Optional[str]:
         if not self.logger:
@@ -219,28 +219,15 @@ class ChatClient:
         return title
 
     # ----------------------
-    # Helper-related helpers
+    # Instrument detection
     # ----------------------
     @staticmethod
     def wants_instrument(text: Optional[str]) -> bool:
-        """Return True if the assistant text indicates an external instrument is needed.
-
-        Matches modern INSTRUMENT tags and legacy HELPER phrasing for compatibility.
-        """
+        """Return True if the assistant text indicates an external instrument is needed."""
         if not text:
             return False
         lowered = text.lower()
-        return ("[instrument query]" in lowered) or (
-            "requires an instrument" in lowered
-        ) or (
-            # Legacy helper signaling
-            "[helper query]" in lowered or (
-                "requires a helper" in lowered and "paste a helper response" in lowered
-            )
-        )
-
-    # Backwards-compat alias (tests and older callers)
-    wants_helper = wants_instrument
+        return ("[instrument query]" in lowered) or ("requires an instrument" in lowered)
 
     # -------------
     # Public API
@@ -342,22 +329,22 @@ class ChatClient:
             ]
             self.logger.log_turn(to_log)
 
-    def process_helper_result(
+    def process_instrument_result(
         self,
-        helper_text: str,
+        instrument_text: str,
         *,
         on_delta: Optional[Callable[[str], None]] = None,
     ) -> Optional[str]:
-        if not helper_text:
+        if not instrument_text:
             return None
-        helper_wrapped = f"[INSTRUMENT RESULT]\n{helper_text}\n[/INSTRUMENT RESULT]"
-        helper_messages = list(self.messages)
-        helper_messages.append({"role": "system", "content": load_helper_prompt()})
-        helper_messages.append({"role": "user", "content": helper_wrapped})
+        instrument_wrapped = f"[INSTRUMENT RESULT]\n{instrument_text}\n[/INSTRUMENT RESULT]"
+        instrument_messages = list(self.messages)
+        instrument_messages.append({"role": "system", "content": load_instrument_prompt()})
+        instrument_messages.append({"role": "user", "content": instrument_wrapped})
         reply: Optional[str]
         if self.instrument is not None:
             instrument_response = self.instrument.send_chat(
-                helper_messages,
+                instrument_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
                 stream=bool(self.stream),
@@ -367,7 +354,7 @@ class ChatClient:
         else:
             payload = build_payload(
                 model=self.model,
-                messages=helper_messages,
+                messages=instrument_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 stream=bool(self.stream),
@@ -383,25 +370,16 @@ class ChatClient:
             if self.strip_reasoning:
                 reply = strip_chain_of_thought(reply)
             reply = clean_public_reply(reply) or ""
-            self.messages.append({"role": "user", "content": helper_wrapped})
+            self.messages.append({"role": "user", "content": instrument_wrapped})
             self.messages.append({"role": "assistant", "content": reply})
             if self.logger:
                 sys_msgs = [m for m in self.messages if m.get("role") == "system"]
                 to_log = (sys_msgs[-1:] if sys_msgs else []) + [
-                    {"role": "user", "content": helper_wrapped},
+                    {"role": "user", "content": instrument_wrapped},
                     {"role": "assistant", "content": reply},
                 ]
                 self.logger.log_turn(to_log)
         return reply
-
-    # New naming for symmetry with instruments; keep helper path as implementation
-    def process_instrument_result(
-        self,
-        instrument_text: str,
-        *,
-        on_delta: Optional[Callable[[str], None]] = None,
-    ) -> Optional[str]:
-        return self.process_helper_result(instrument_text, on_delta=on_delta)
 
     # -----------------
     # Diagnostics / info

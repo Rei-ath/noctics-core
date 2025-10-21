@@ -19,7 +19,7 @@ A `.env` next to the package or in CWD always auto-loads. Favorite variables:
 - `CENTRAL_LLM_API_KEY` / `OPENAI_API_KEY` – when you’re hitting remote clouds
 - `CENTRAL_NOX_SCALE` – force persona scale (`nano|micro|milli|centi`)
 - `CENTRAL_PERSONA_*` – override name, tagline, strengths, limits
-- `CENTRAL_HELPERS` – comma-separated helper roster for interactive selection
+- `CENTRAL_INSTRUMENTS` – comma-separated instrument roster for interactive selection
 - `CENTRAL_HELPER_AUTOMATION` – set `1` when a router is ready to auto-dispatch
 
 Drop a JSON override at `config/persona.overrides.json` if you need a full persona rewrite.
@@ -29,7 +29,7 @@ Drop a JSON override at `config/persona.overrides.json` if you need a full perso
 - `central/commands/` – sessions, instruments, completions, help text
 - `central/cli/` – argument parsing + interactive shell
 - `interfaces/` – session logging, PII sanitizer, dotenv loader
-- `noxl/` – memory explorer CLI and helpers
+- `noxl/` – memory explorer CLI and utilities
 - `tests/` – pytest suite; keep it green
 
 ## Developer loop
@@ -38,7 +38,7 @@ pytest -q
 ruff check .
 python main.py --stream
 ```
-Need coverage for a new helper or transport? Drop a test in `tests/`.
+Need coverage for a new instrument or transport? Drop a test in `tests/`.
 
 ## Persona remix
 ```bash
@@ -61,11 +61,11 @@ python -c "from central.persona import reload_persona_overrides; reload_persona_
 - Logs land in `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/`.
 - `python -m noxl --limit 10` to peek at recent chats.
 - `/title`, `/rename`, `/archive` work in the CLI.
-- `CENTRAL_HELPER_ANON=0` if you want raw helper prompts stored (be careful).
+- `CENTRAL_INSTRUMENT_ANON=0` if you want raw instrument prompts stored (be careful).
 
 ## Instrument reality check
 Central tries local inference first. When it requests an external instrument:
-1. It asks you which helper to use (unless you passed `--instrument`).
+1. It asks you which instrument to use (unless you passed `--instrument`).
 2. Emits a sanitized `[INSTRUMENT QUERY]`.
 3. Waits for the router/automation. No router? You’ll get a reminder to paste results.
 

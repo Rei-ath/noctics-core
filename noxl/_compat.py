@@ -1,7 +1,7 @@
-"""Compatibility helpers that keep the noxl toolkit lightweight.
+"""Compatibility utilities that keep the noxl toolkit lightweight.
 
 These wrappers make the CLI resilient when optional runtime dependencies
-such as ``central`` or ``interfaces`` are not available. Each helper
+such as ``central`` or ``interfaces`` are not available. Each utility
 prefers the richer implementation when present and otherwise falls back
 to standard-library only behaviour.
 """

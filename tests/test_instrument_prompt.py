@@ -17,11 +17,11 @@ class _StubTransport(LLMTransport):
 
 
 @pytest.mark.usefixtures("tmp_path")
-def test_helper_result_injects_system_prompt():
+def test_instrument_result_injects_system_prompt():
     stub = _StubTransport()
 
     client = ChatClient(stream=False, enable_logging=False, transport=stub)
-    client.process_helper_result("helper text")
+    client.process_instrument_result("instrument text")
 
     msgs = stub.messages
     assert msgs is not None

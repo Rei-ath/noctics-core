@@ -1,5 +1,5 @@
 {
-  "helper": {
+  "instrument": {
     "automation": false,
     "roster": ["claude", "gpt-4o", "grok"]
   }

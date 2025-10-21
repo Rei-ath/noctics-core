@@ -3,12 +3,12 @@ from __future__ import annotations
 from noxl import compute_title_from_messages
 
 
-def test_compute_title_skips_helper_and_limits_words():
+def test_compute_title_skips_instrument_and_limits_words():
     msgs = [
         {"role": "system", "content": "sys"},
         {
             "role": "user",
-            "content": "[HELPER RESULT]\nsome long helper output\n[/HELPER RESULT]",
+            "content": "[INSTRUMENT RESULT]\nsome long instrument output\n[/INSTRUMENT RESULT]",
         },
         {
             "role": "user",

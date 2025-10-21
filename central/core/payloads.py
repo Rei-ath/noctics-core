@@ -1,4 +1,4 @@
-"""Payload helpers shared by the chat client."""
+"""Payload utilities shared by the chat client."""
 
 from __future__ import annotations
 

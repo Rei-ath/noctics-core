@@ -1,5 +1,5 @@
 """
-Simple PII redaction helpers (no external deps).
+Simple PII redaction utilities (no external deps).
 
 Goal: keep it tiny and readable. Use conservative regexes to redact
 common high-risk items: email, phone, credit card numbers, IPv4.

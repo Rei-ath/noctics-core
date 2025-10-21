@@ -1,4 +1,4 @@
-"""Importable session helpers and CLI utilities for the Noxl toolkit."""
+"""Importable session tooling and CLI utilities for the Noxl toolkit."""
 
 from __future__ import annotations
 

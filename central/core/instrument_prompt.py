@@ -1,17 +1,17 @@
-"""Helper prompt loading utilities for Central."""
+"""Instrument follow-up prompt loading utilities for Central."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
 
-__all__ = ["load_helper_prompt"]
+__all__ = ["load_instrument_prompt"]
 
 _DEFAULT_PROMPT = (
     "You are **Central**, acting as a structured explainer and code provider.\n"
     "You always work with a JSON object where each key contains two fields:\n"
     "- \"point\" → human explanation (not copyable)\n"
-    "- \"copy\" → Python code snippet (safe for user to copy-paste)\n\n"
+    "- \"copy\" → Python code snippet (safe for the user to copy-paste)\n\n"
     "Behavior Rules:\n"
     "1. If the user asks for an explanation, return the \"point\".\n"
     "   - Prefix with: **\"Explanation:\"**\n"
@@ -26,24 +26,23 @@ _DEFAULT_PROMPT = (
     "   - “Do you want the explanation (point), snippet (copy), or full script?”\n"
 )
 
-_HELPER_PROMPT_CACHE: Optional[str] = None
+_INSTRUMENT_PROMPT_CACHE: Optional[str] = None
 
 
-def load_helper_prompt() -> str:
-    """Return the helper prompt, cached after first read."""
+def load_instrument_prompt() -> str:
+    """Return the instrument follow-up prompt, cached after first read."""
 
-    global _HELPER_PROMPT_CACHE
-    if _HELPER_PROMPT_CACHE is not None:
-        return _HELPER_PROMPT_CACHE
+    global _INSTRUMENT_PROMPT_CACHE
+    if _INSTRUMENT_PROMPT_CACHE is not None:
+        return _INSTRUMENT_PROMPT_CACHE
 
-    prompt_path = Path(__file__).resolve().parents[1] / "memory" / "helper_result_prompt.txt"
+    prompt_path = Path(__file__).resolve().parents[1] / "memory" / "instrument_result_prompt.txt"
     try:
         text = prompt_path.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         text = ""
     if text:
-        _HELPER_PROMPT_CACHE = text
+        _INSTRUMENT_PROMPT_CACHE = text
     else:
-        _HELPER_PROMPT_CACHE = _DEFAULT_PROMPT
-    return _HELPER_PROMPT_CACHE
-
+        _INSTRUMENT_PROMPT_CACHE = _DEFAULT_PROMPT
+    return _INSTRUMENT_PROMPT_CACHE

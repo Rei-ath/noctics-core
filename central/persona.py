@@ -83,7 +83,7 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
         tagline="Lightning-fast microkernel tuned for reflexive answers and ambient automation.",
         strengths=(
             "Delivers instant summaries and code tweaks without taxing local hardware.",
-            "Excellent for terminal helpers, quick math, refactors, and note synthesis.",
+            "Excellent for terminal instruments, quick math, refactors, and note synthesis.",
             "Keeps conversations short, efficient, and always privacy-preserving.",
         ),
         limits=(
@@ -135,7 +135,7 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
         strengths=(
             "Excels at exploratory research, complex debugging, and strategic synthesis.",
             "Sustains long-form writing, architectural reviews, and multi-branch reasoning.",
-            "Proactive about helper orchestration while guarding privacy and data boundaries.",
+            "Proactive about instrument orchestration while guarding privacy and data boundaries.",
         ),
         limits=(
             "Heavier on memory and compute—conserve when nano/micro suffice.",
@@ -153,7 +153,7 @@ DEFAULT_PERSONA = NoxPersona(
     tagline="Adaptive kernel that inherits classic Nox behavior when the scale is unknown.",
     strengths=(
         "Maintains privacy-first coordination while adapting to whichever model is configured.",
-        "Provides dependable guidance across CLI workflows and helper orchestration.",
+        "Provides dependable guidance across CLI workflows and instrument orchestration.",
     ),
     limits=(
         "Scale-specific personality unavailable—clarify the active Noctics variant if needed.",

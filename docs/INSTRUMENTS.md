@@ -3,17 +3,17 @@
 Central knows when it’s outmatched and needs an external instrument—an LLM router,
 another provider, whatever muscle you’ve got. Here’s how to control the flow.
 
-## Label the helper
-- CLI flags: `--instrument claude` (alias `--helper`)
-- Slash command: `/helper claude` (or `/helper` alone to clear)
+## Label the instrument
+- CLI flags: `--instrument claude`
+- Slash command: `/instrument claude`
 - No label set? You’ll get a picker with whatever roster we know about.
 
 Rosters come from:
-1. `CENTRAL_HELPERS` or `CENTRAL_INSTRUMENTS` env vars (`"claude,gpt-4o,grok"`)
+1. `CENTRAL_INSTRUMENTS` env var (`"claude,gpt-4o,grok"`)
 2. `config/central.json`:
    ```json
    {
-     "helper": {
+     "instrument": {
        "roster": ["claude", "gpt-4o"],
        "automation": false
      }
@@ -41,7 +41,7 @@ Rosters come from:
 ## Automation story
 1. Central explains why an instrument is needed and prints the sanitized query.
 2. Automation off (default): you get instructions to run it yourself.
-3. Automation on: set `CENTRAL_HELPER_AUTOMATION=1` (compat alias). A router listens for the query, sends it out, and feeds `[INSTRUMENT RESULT]` back to Central.
+3. Automation on: set `CENTRAL_INSTRUMENT_AUTOMATION=1`. A router listens for the query, sends it out, and feeds `[INSTRUMENT RESULT]` back to Central.
 4. `ChatClient.process_instrument_result(...)` handles the stitching so the conversation resumes smoothly.
 
 ## Custom routers
@@ -52,8 +52,8 @@ If you’re writing your own router:
 - Feed it back via the CLI prompt or `process_instrument_result`.
 
 ## Pro tips
-- Keep helper names short and unique—makes tab-completion happier.
-- Use env overrides per deployment (`CENTRAL_HELPERS="gpt-4o,claude"`) so you don’t leak internal rosters.
-- Remember to sanitize helper outputs before you paste them back; Central logs everything by default.
+- Keep instrument names short and unique—makes tab-completion happier.
+- Use env overrides per deployment (`CENTRAL_INSTRUMENTS="gpt-4o,claude"`) so you don’t leak internal rosters.
+- Remember to sanitize instrument outputs before you paste them back; Central logs everything by default.
 
 That’s the playbook. Automate it, extend it, or ignore it and keep doing manual pastes—either way, I’m logging the receipts.

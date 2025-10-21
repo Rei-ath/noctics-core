@@ -13,12 +13,12 @@ class StubTransport:
         self.calls += 1
         reply = (
             "Noctics Central: Hardware context: OS: Linux; CPUs: 8; Memory: 7.6 GB\n"
-            "[HELPER RESULT]\nDetailed info for user\n[/HELPER RESULT]"
+            "[INSTRUMENT RESULT]\nDetailed info for user\n[/INSTRUMENT RESULT]"
         )
         return reply, {"choices": [{"message": {"content": reply}}]}
 
 
-def test_chatclient_removes_helper_wrappers_and_hardware():
+def test_chatclient_removes_instrument_wrappers_and_hardware():
     client = ChatClient(transport=StubTransport(), enable_logging=True, stream=False)
     reply = client.one_turn("status report")
 

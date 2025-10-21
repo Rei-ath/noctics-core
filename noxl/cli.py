@@ -1,4 +1,4 @@
-"""Command-line interface helpers for the Noxl memory browser."""
+"""Command-line interface tooling for the Noxl memory browser."""
 
 from __future__ import annotations
 

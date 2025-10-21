@@ -1,4 +1,4 @@
-"""Reasoning and output sanitisation helpers for Central."""
+"""Reasoning and output sanitisation utilities for Central."""
 
 from __future__ import annotations
 
@@ -8,18 +8,12 @@ from typing import List, Optional, Tuple
 __all__ = ["strip_chain_of_thought", "extract_public_segments", "clean_public_reply"]
 
 _THINK_PATTERN = re.compile(r"<think>.*?</think>\s*", re.IGNORECASE | re.DOTALL)
-_HELPER_RESULT_BLOCK = re.compile(
-    r"^\s*\[HELPER\s+RESULT\](.*?)\[/HELPER\s+RESULT\]\s*$",
-    re.IGNORECASE | re.DOTALL,
-)
 _INSTRUMENT_RESULT_BLOCK = re.compile(
     r"^\s*\[INSTRUMENT\s+RESULT\](.*?)\[/INSTRUMENT\s+RESULT\]\s*$",
     re.IGNORECASE | re.DOTALL,
 )
 _AUX_BLOCKS = [
     re.compile(r"\[SET\s*TITLE\].*?\[/SET\s*TITLE\]", re.IGNORECASE | re.DOTALL),
-    re.compile(r"\[HELPER\s+QUERY\].*?\[/HELPER\s+QUERY\]", re.IGNORECASE | re.DOTALL),
-    re.compile(r"\[HELPER\s+RESULT\].*?\[/HELPER\s+RESULT\]", re.IGNORECASE | re.DOTALL),
     re.compile(r"\[INSTRUMENT\s+QUERY\].*?\[/INSTRUMENT\s+QUERY\]", re.IGNORECASE | re.DOTALL),
     re.compile(r"\[INSTRUMENT\s+RESULT\].*?\[/INSTRUMENT\s+RESULT\]", re.IGNORECASE | re.DOTALL),
 ]
@@ -66,7 +60,7 @@ def extract_public_segments(buffer: str) -> Tuple[str, str]:
 def clean_public_reply(text: Optional[str]) -> Optional[str]:
     """Normalise assistant replies before surfacing them to the user.
 
-    Removes helper result wrappers, duplicate CLI labels, and stray hardware
+    Removes instrument result wrappers, duplicate CLI labels, and stray hardware
     context echoes that occasionally leak from the model output.
     """
 
@@ -81,7 +75,7 @@ def clean_public_reply(text: Optional[str]) -> Optional[str]:
     cleaned = _CENTRAL_PREFIX.sub("", cleaned, count=1).lstrip()
 
     def _unwrap_result_block(value: str) -> str:
-        for pattern in (_HELPER_RESULT_BLOCK, _INSTRUMENT_RESULT_BLOCK):
+    for pattern in (_INSTRUMENT_RESULT_BLOCK,):
             match = pattern.match(value)
             if match:
                 return match.group(1).strip()

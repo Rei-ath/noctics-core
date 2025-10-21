@@ -1,4 +1,4 @@
-"""Shared path helpers for resolving user memory locations."""
+"""Shared path utilities for resolving user memory locations."""
 
 from __future__ import annotations
 

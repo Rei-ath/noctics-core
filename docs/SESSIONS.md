@@ -13,7 +13,7 @@ Set `NOCTICS_MEMORY_HOME` if you want to park the vault somewhere else. On first
 
 ## File anatomy
 - `session-20250101-010203.jsonl` → turn-by-turn log
-- `session-20250101-010203.meta.json` → id, title, created/updated, custom flag, helper info
+- `session-20250101-010203.meta.json` → id, title, created/updated, custom flag, instrument info
 - `day.json` → deduped summary for the day
 
 ## Titles & naming rights
@@ -46,11 +46,11 @@ python -m noxl rename session-20250101-010203 "Prod Outage Retro"
 python -m noxl merge session-A session-B --title "Combo Tape"
 python -m noxl archive
 python -m noxl meta session-20250101-010203
-python -m noxl count --search helper
+python -m noxl count --search instrument
 ```
 Add `--root PATH` to poke alternate directories (imports, archives, etc.).
 
-Programmatic helpers:
+Programmatic utilities:
 ```python
 from noxl import list_sessions, load_session_messages, compute_title_from_messages
 ```

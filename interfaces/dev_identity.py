@@ -1,4 +1,4 @@
-"""Developer identity helpers for Central."""
+"""Developer identity utilities for Central."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def resolve_developer_identity(
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Internal utilities
 # ---------------------------------------------------------------------------
 
 

@@ -1,0 +1,27 @@
+"""PyInstaller entrypoint for packaged Noctics binaries.
+
+This module mirrors the repository-level ``main.py`` so that bundled
+executables (nano/micro/centi builds) can launch the same multitool CLI.
+"""
+
+from __future__ import annotations
+
+import sys
+from typing import Sequence
+
+
+def _run(argv: Sequence[str]) -> int:
+    """Delegate to the shared CLI entrypoint."""
+
+    from noctics_cli.multitool import main as cli_main
+
+    return cli_main(list(argv))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = list(argv) if argv is not None else sys.argv[1:]
+    return _run(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

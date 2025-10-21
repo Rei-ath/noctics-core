@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Self-improvement data builders for Central.
 
-This module exposes helpers for generating curated self-improvement sessions.
+This module exposes utilities for generating curated self-improvement sessions.
 ``generate_dataset_jsonl`` writes a JSONL corpus, while ``generate_memory_sessions``
 logs them via SessionLogger so they appear as real memories.
 """
@@ -18,7 +18,7 @@ from typing import Iterable, List, Optional
 from interfaces.session_logger import SessionLogger
 from central.persona import resolve_persona, render_system_prompt
 
-SYSTEM_PROMPT_PATH = Path("memory/system_prompt.txt")
+SYSTEM_PROMPT_PATH = Path("memory/system_prompt.md")
 DEFAULT_SYSTEM_PROMPT = (
     "You are {{CENTRAL_NAME}}, the {{NOX_VARIANT}} kernel safeguarding privacy while orchestrating Noctics."
 )
@@ -43,27 +43,27 @@ class Scenario:
 
 SCENARIOS: List[Scenario] = [
     Scenario(
-        identifier="helper-workflow",
-        title="Helper Workflow Self-Check",
-        tags=["helper", "self-review"],
+        identifier="instrument-workflow",
+        title="Instrument Workflow Self-Check",
+        tags=["instrument", "self-review"],
         turns=[
             Turn(
                 user=(
-                    "Central, audit your helper workflow for a tricky coding task. "
+                    "Central, audit your instrument workflow for a tricky coding task. "
                     "Show the exact hand-off you would perform when you need external support."
                 ),
                 assistant=(
-                    "When my confidence is below 5/10 I emit a helper request.\n"
-                    "[HELPER QUERY]\n"
-                    "Helper: CodeSmith\n"
+                    "When my confidence is below 5/10 I emit an instrument request.\n"
+                    "[INSTRUMENT QUERY]\n"
+                    "Instrument: CodeSmith\n"
                     "Deliverable: Provide a Python function that deduplicates log lines while preserving order. Include a terse explanation.\n"
-                    "Reason: The user wants production-grade code and a justification; asking a helper avoids guessing.\n"
-                    "[/HELPER QUERY]"
+                    "Reason: The user wants production-grade code and a justification; asking an instrument avoids guessing.\n"
+                    "[/INSTRUMENT QUERY]"
                 ),
             ),
             Turn(
                 user=(
-                    "[HELPER RESULT]\n"
+                    "[INSTRUMENT RESULT]\n"
                     "def dedupe_logs(lines):\n"
                     "    seen = set()\n"
                     "    ordered = []\n"
@@ -73,7 +73,7 @@ SCENARIOS: List[Scenario] = [
                     "            ordered.append(line)\n"
                     "    return ordered\n\n"
                     "Explanation: track a `seen` set while building a list of unique lines.\n"
-                    "[/HELPER RESULT]"
+                    "[/INSTRUMENT RESULT]"
                 ),
                 assistant=(
                     "Here is the stitched outcome from CodeSmith:\n"
@@ -88,7 +88,7 @@ SCENARIOS: List[Scenario] = [
                     "    return ordered\n"
                     "```\n"
                     "Why it works: we visit each line once, track membership in `seen`, and return the preserved-order list.\n"
-                    "Next steps: wrap this helper result in tests or feed additional log samples if needed.\n"
+                    "Next steps: wrap this instrument result in tests or feed additional log samples if needed.\n"
                     "Confidence: 8/10"
                 ),
             ),
@@ -120,7 +120,7 @@ SCENARIOS: List[Scenario] = [
                 user="A user accidentally pasted credentials: 'db-password = hunter2'. Walk through your response and privacy safeguards.",
                 assistant=(
                     "I redact sensitive strings before echoing anything.\n"
-                    "Response snippet: *I noticed credentials in your paste and removed them. Never share secrets with helpers. Would you like me to rotate the key instead?*\n"
+                    "Response snippet: *I noticed credentials in your paste and removed them. Never share secrets with instruments. Would you like me to rotate the key instead?*\n"
                     "Behind the scenes I scrub the transcript and warn the user about rotating secrets.\n"
                     "Confidence: 8/10"
                 ),

@@ -12,11 +12,11 @@ from interfaces.pii import sanitize as pii_sanitize
 # Instrument query anonymization
 # -----------------------------
 
-_INSTRUMENT_QUERY_RE = re.compile(r"\[(?:HELPER|INSTRUMENT)\s+QUERY\](.*?)\[/(?:HELPER|INSTRUMENT)\s+QUERY\]", re.IGNORECASE | re.DOTALL)
+_INSTRUMENT_QUERY_RE = re.compile(r"\[INSTRUMENT\s+QUERY\](.*?)\[/INSTRUMENT\s+QUERY\]", re.IGNORECASE | re.DOTALL)
 
 
 def extract_instrument_query(text: str) -> Optional[str]:
-    """Extract the content of a [INSTRUMENT QUERY]... block (helper fallback).
+    """Extract the content of a [INSTRUMENT QUERY]... block.
 
     Returns None if no block is present.
     """
@@ -67,7 +67,7 @@ def get_instrument_candidates() -> List[str]:
 
     env_instruments = [
         s.strip()
-        for s in (os.getenv("CENTRAL_INSTRUMENTS") or os.getenv("CENTRAL_HELPERS") or "").split(",")
+        for s in (os.getenv("CENTRAL_INSTRUMENTS") or "").split(",")
         if s.strip()
     ]
     if env_instruments:
@@ -95,7 +95,7 @@ def get_instrument_candidates() -> List[str]:
 def instrument_automation_enabled() -> bool:
     """Return True if automatic instrument stitching is available."""
 
-    value = os.getenv("CENTRAL_INSTRUMENT_AUTOMATION", "").strip() or os.getenv("CENTRAL_HELPER_AUTOMATION", "").strip()
+    value = os.getenv("CENTRAL_INSTRUMENT_AUTOMATION", "").strip()
     if value:
         return value.lower() in {"1", "true", "on", "yes"}
     return get_runtime_config().instrument.automation
