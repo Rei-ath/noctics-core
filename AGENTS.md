@@ -6,6 +6,9 @@
 - Prefer the bootstrap script: run `scripts/nox.run` to spin up the bundled Ollama binary, pull/build the model, and launch Central with the right URL/model exports.
 - Export overrides when needed: `CENTRAL_MODEL`, `CENTRAL_LLM_URL_OVERRIDE`, `CENTRAL_LLM_MODEL_OVERRIDE`, `OLLAMA_HOST`, `OLLAMA_REPO_URL`.
 
+## Roadmap
+- The working medium-term roadmap lives in `../agents.plan`. Keep it in sync when you add major milestones or reprioritise features.
+
 ## Submodules & Repository Sync
 - The root project now vendors the `noctics-core` git repo as a submodule at `core/`. After cloning the top-level repo run `git submodule update --init --recursive` to pull the core sources.
 - Day-to-day core work still happens inside `core/`; commit and push there first (`git -C core status`, `git -C core commit …`, `git -C core push origin main`).
@@ -14,6 +17,7 @@
 - Never rewrite the submodule from the parent via `git add core/…` file paths—stage the submodule pointer only.
 
 ## Repository Layout
+- `core_pyd/`: compiled wheels for Central (`central`, `config`, `inference`) used in closed-source bundles. Treated as a binary fallback when `core/` sources are unavailable.
 - `central/`
   - `cli/`: argument parsing, interactive shell, dev tooling, startup status HUD.
   - `commands/`: helper/session command handlers used by the CLI.
@@ -23,7 +27,7 @@
   - `system_info.py`, `runtime_identity.py`, `version.py`, `colors.py`: shared utilities.
 - `interfaces/`: adapters for dotenv loading, session logging, PII sanitisation.
 - `noxl/`: programmatic access to session utilities plus an alternate CLI.
-- `memory/`: packaged prompts (`system_prompt.txt`, `system_prompt.dev.txt`, etc.). Live session data defaults to `~/.local/share/noctics/memory/` so it persists across repo updates (override with `NOCTICS_MEMORY_HOME`).
+- `memory/`: packaged prompts (`system_prompt.md`, `system_prompt.dev.md`, etc.). Live session data defaults to `~/.local/share/noctics/memory/` so it persists across repo updates (override with `NOCTICS_MEMORY_HOME`).
 - `models/`: `ModelFile` templates or manual `.gguf` drops; the bootstrap script reads from here when it cannot `ollama pull`.
 - `inference/`: houses the cached `ollama` binary (or `ollama-mini` clone).
 - `scripts/`: automation (`nox.run`, self-play/self-improve harnesses).
@@ -36,7 +40,7 @@
 - `scripts/build_j_rei.sh` → optional personal bundle that mirrors your active `.env`.
 - `scripts/build_centi.sh` → centi-nox (Qwen3 8B) bundle (`dist/centi-noctics/`).
 - `scripts/build_micro.sh` → micro-nox (Qwen3 1.7B) bundle (`dist/micro-noctics/`).
-All builds package the shared prompts (`memory/system_prompt.txt` and `memory/system_prompt.dev.txt`) so the assistant identifies itself as the scale-aware `*-nox` persona (normal vs developer mode).
+All builds package the shared prompts (`memory/system_prompt.md` and `memory/system_prompt.dev.md`) so the assistant identifies itself as the scale-aware `*-nox` persona (normal vs developer mode).
 
 ### Nox Scale Map
 
@@ -111,13 +115,14 @@ For deeper examples (including troubleshooting tips), see `core/docs/PERSONA.md`
 - Run tests: `pytest -q` or targeted selections (`pytest -k helper -q`).
 - Lint/format: `ruff check .`, `black .`, `isort .` as needed (match CI expectations).
 - Use `scripts/nox.run` for manual testing; it prints the endpoint/model and will pull/build `CENTRAL_MODEL` automatically if Ollama lacks it.
+- For binary-only drops, smoke test the compiled `core_pyd` bundle by temporarily hiding `core/` and running `python -c "from central.core import ChatClient"`.
 - Central auto-detects SDK instruments (e.g., OpenAI) via `instruments/`; ensure required SDKs (`pip install openai>=1.0`) and API keys (`OPENAI_API_KEY`/`CENTRAL_LLM_API_KEY`) are present when targeting remote providers. Streaming falls back to raw HTTP if an instrument is unavailable.
 - When developing helper automation, simulate helper queries via the CLI; Central emits `[HELPER QUERY]` when its self-score ≤ 5 and expects the router to respond.
 - Keep commits clean (Conventional Commits) and avoid reintroducing large binaries—if one slips in, rewrite history with `git filter-repo` before pushing.
 
 ## Runtime & Helper Behaviour
 - Central self-scores responses; at ≤ 5 it prepares a helper query. If no router is integrated it tells the user helpers are unavailable.
-- Instrument semantics live in `memory/system_prompt.txt`; adjust only if you change the external-calls workflow. Legacy “helper” aliases are maintained for compatibility.
+- Instrument semantics live in `memory/system_prompt.md`; adjust only if you change the external-calls workflow. Legacy “helper” aliases are maintained for compatibility.
 - Dev mode (gated by passphrase) unlocks shell bridging and shows developer diagnostics; keep it hidden in user mode.
 - Sanitisation removes `<think>` traces before streaming replies; `--show-think` toggles the explicit thinking loader animation.
 
