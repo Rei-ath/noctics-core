@@ -108,11 +108,36 @@ def _fallback_memory_root() -> Path:
             else:
                 base = Path.home() / ".local" / "share"
         root = base / "noctics" / "memory"
+    fallback_root = (Path(__file__).resolve().parents[2] / "memory").resolve()
     try:
         root.mkdir(parents=True, exist_ok=True)
     except Exception:
-        return (Path(__file__).resolve().parents[2] / "memory").resolve()
+        fallback_root.mkdir(parents=True, exist_ok=True)
+        return fallback_root
+    if not _is_writable_directory(root):
+        fallback_root.mkdir(parents=True, exist_ok=True)
+        return fallback_root
     return root
+
+
+def _is_writable_directory(path: Path) -> bool:
+    if not path.exists():
+        return False
+    if not os.access(path, os.W_OK | os.X_OK):
+        return False
+    probe = path / ".noxl-write-test"
+    try:
+        with probe.open("w", encoding="utf-8") as handle:
+            handle.write("")
+        probe.unlink(missing_ok=True)
+        return True
+    except Exception:
+        if probe.exists():
+            try:
+                probe.unlink()
+            except Exception:
+                pass
+        return False
 
 
 @lru_cache(maxsize=None)

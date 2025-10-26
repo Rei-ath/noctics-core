@@ -85,6 +85,10 @@ def resolve_memory_root() -> Path:
         legacy = _REPO_MEMORY_ROOT
         legacy.mkdir(parents=True, exist_ok=True)
         return legacy
+    if not _is_writable_directory(root):
+        legacy = _REPO_MEMORY_ROOT
+        legacy.mkdir(parents=True, exist_ok=True)
+        return legacy
     return root
 
 
@@ -98,3 +102,23 @@ def resolve_users_root() -> Path:
     root = resolve_memory_root() / "users"
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def _is_writable_directory(path: Path) -> bool:
+    if not path.exists():
+        return False
+    if not os.access(path, os.W_OK | os.X_OK):
+        return False
+    probe = path / ".noctics-write-test"
+    try:
+        with probe.open("w", encoding="utf-8") as handle:
+            handle.write("")
+        probe.unlink(missing_ok=True)
+        return True
+    except Exception:
+        if probe.exists():
+            try:
+                probe.unlink()
+            except Exception:
+                pass
+        return False
