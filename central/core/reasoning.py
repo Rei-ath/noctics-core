@@ -75,7 +75,7 @@ def clean_public_reply(text: Optional[str]) -> Optional[str]:
     cleaned = _CENTRAL_PREFIX.sub("", cleaned, count=1).lstrip()
 
     def _unwrap_result_block(value: str) -> str:
-    for pattern in (_INSTRUMENT_RESULT_BLOCK,):
+        for pattern in (_INSTRUMENT_RESULT_BLOCK,):
             match = pattern.match(value)
             if match:
                 return match.group(1).strip()

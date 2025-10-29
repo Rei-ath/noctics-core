@@ -78,7 +78,7 @@ Gate it with a passphrase (`CENTRAL_DEV_PASSPHRASE`). When unlocked:
 ## Release sync (for the private repo)
 When you cut a release, the parent repo bumps the submodule pointer to a tagged
 commit here. Keep history squeaky clean—no vendored binaries, no secrets. If you
-need obfuscation, run `scripts/push_core_pyd.sh` from the parent repo; that’s
+need obfuscation, run `scripts/push_core_pinaries.sh` from the parent repo; that’s
 where the compiled extensions live.
 
 Keep it sharp, keep it tested, and don’t make me revert anything.

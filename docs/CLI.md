@@ -47,6 +47,11 @@ greets you, offers to restore a session, and then gets out of the way.
 
 Tab completion is live for commands, instrument names, and session ids/indices.
 
+## TUI dashboard
+- Run `noctics tui` to open the curses-based session browser.
+- Controls: arrow keys (or `j`/`k`) to move, `Enter` to load details, `r` to refresh, `q` to exit.
+- The right panel shows a wrapped preview of the selected session’s recent turns.
+
 ## Instrument flow (how the magic routes)
 1. Central answers locally first.
 2. If it needs help, it asks for an instrument label (respecting env/config rosters).

@@ -27,7 +27,7 @@ fresh.
 
 ## Repo layout, trash talk edition
 - `core/` – public source of truth. Keep it spotless.
-- `core_pyd/` – binary payload for the secret builds (`central`, `config`,
+- `core_pinaries/` – binary payload for the secret builds (`central`, `config`,
   `inference`, `interfaces`, `noxl`).
 - `central/cli/` – argument parsing, interactive shell, onboarding flow.
 - `central/core/` – `ChatClient`, payload mixers, reasoning filters.
@@ -44,7 +44,7 @@ fresh.
 |--------|--------------|
 | `scripts/build_release.sh` | Full PyInstaller bundle with Ollama runtime + models. |
 | `scripts/build_centi.sh` / `build_micro.sh` | Skinny bundles when you only need one scale. |
-| `scripts/push_core_pyd.sh` | Recompiles all Nuitka extensions and refreshes `core_pyd/`. |
+| `scripts/push_core_pinaries.sh` | Recompiles all Nuitka extensions and refreshes `core_pinaries/`. |
 
 Every bundle packages `memory/system_prompt.md` + `memory/system_prompt.dev.md` so
 the persona identifies itself correctly.
@@ -76,7 +76,7 @@ model alias is ambiguous.
 - Tests: `pytest -q` or target with `-k`
 - Lint: `ruff check .`, `black .`, `isort .` (match CI expectations)
 - Manual run: `scripts/nox.run`
-- Binary smoke test: hide `core/`, leave `core_pyd/` on `PYTHONPATH`, and run
+- Binary smoke test: hide `core/`, leave `core_pinaries/` on `PYTHONPATH`, and run
   `python -c "from central.core import ChatClient"`
 
 ## Runtime & instrument behavior
