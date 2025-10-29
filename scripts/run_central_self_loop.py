@@ -14,8 +14,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from interfaces.session_logger import SessionLogger
-from scripts.self_improve_data import SCENARIOS, Scenario, load_system_prompt
+from interfaces.session_logger import SessionLogger  # noqa: E402
+from scripts.self_improve_data import SCENARIOS, Scenario, load_system_prompt  # noqa: E402
 
 
 def log_scenario(

@@ -125,11 +125,13 @@ def test_chatclient_openai_rest_payload(monkeypatch) -> None:
     assert "stream_options" not in payload
     assert payload.get("max_completion_tokens") is None
     assert payload.get("max_tokens") == 77
-    prompt = payload.get("prompt")
-    assert isinstance(prompt, str) and "Hello REST" in prompt
+    assert payload.get("model") == "gpt-4o-mini"
+    assert payload.get("stream") is True
+    assert "prompt" not in payload
     messages = payload.get("messages")
     assert isinstance(messages, list) and messages
-    assert messages[-1]["content"][0]["text"] == "Hello REST"
+    assert messages[-1]["role"] == "user"
+    assert messages[-1]["content"] == "Hello REST"
 
 
 def test_chatclient_ollama_payload_passthrough(monkeypatch) -> None:

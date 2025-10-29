@@ -1,3 +1,5 @@
+import os
+
 from central.core import ChatClient
 
 
@@ -31,3 +33,52 @@ def test_describe_target_reports_config(monkeypatch):
     assert info["central_scale"] == "prime"
     assert info["noctics_variant"] == "noctics-prime"
     assert info["model_target"] == "auto"
+    assert info["target_model"] == "test-model"
+
+
+def test_openai_model_mapping(monkeypatch):
+    monkeypatch.setenv("NOCTICS_SKIP_DOTENV", "1")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.delenv("CENTRAL_TARGET_MODEL", raising=False)
+    monkeypatch.setenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+
+    client = ChatClient(
+        url="https://api.openai.com/v1/chat/completions",
+        model="centi-nox",
+        enable_logging=False,
+    )
+
+    info = client.describe_target()
+
+    assert info["model"] == "centi-nox"
+    assert info["target_model"] == os.getenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+
+
+def test_openai_payload_structure(monkeypatch):
+    monkeypatch.setenv("NOCTICS_SKIP_DOTENV", "1")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+
+    client = ChatClient(
+        url="https://api.openai.com/v1/chat/completions",
+        model="centi-nox",
+        enable_logging=False,
+    )
+
+    raw_payload = {
+        "model": "centi-nox",
+        "system": "Be helpful",
+        "messages": [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi"},
+        ],
+        "options": {"temperature": 0.7},
+    }
+
+    adjusted = client._prepare_payload(raw_payload, stream=False)
+
+    assert adjusted["model"] == "gpt-4o-mini"
+    assert adjusted["messages"][0]["role"] == "system"
+    assert adjusted["messages"][0]["content"] == "Be helpful"
+    assert {msg["role"] for msg in adjusted["messages"]} >= {"user", "assistant", "system"}
+    assert "options" not in adjusted

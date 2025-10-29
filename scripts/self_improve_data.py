@@ -13,7 +13,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import List
 
 from interfaces.session_logger import SessionLogger
 from central.persona import resolve_persona, render_system_prompt

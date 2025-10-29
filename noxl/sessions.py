@@ -33,7 +33,8 @@ def compute_title_from_messages(messages: List[Dict[str, Any]]) -> Optional[str]
     for msg in messages:
         if msg.get("role") == "user":
             content = str(msg.get("content") or "")
-            if content.strip().startswith("[HELPER RESULT]"):
+            stripped = content.strip()
+            if stripped.startswith("[HELPER RESULT]") or stripped.startswith("[INSTRUMENT RESULT]"):
                 continue
             first_user = content
             break

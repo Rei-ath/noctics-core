@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from central.commands.instrument import extract_instrument_query, anonymize_for_instrument
 
 

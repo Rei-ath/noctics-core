@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 
 from interfaces.session_logger import SessionLogger, format_session_display_name

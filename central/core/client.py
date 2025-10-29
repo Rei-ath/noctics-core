@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 import socket
-from copy import deepcopy
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from urllib.error import URLError
@@ -61,10 +59,11 @@ class ChatClient:
         transport: Optional[LLMTransport] = None,
         connector: Optional[CentralConnector] = None,
     ) -> None:
-        try:
-            load_local_dotenv(Path(__file__).resolve().parent)
-        except Exception:
-            pass
+        if os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("NOCTICS_SKIP_DOTENV") != "1":
+            try:
+                load_local_dotenv(Path(__file__).resolve().parent)
+            except Exception:
+                pass
 
         resolved_url = url or os.getenv("CENTRAL_LLM_URL", DEFAULT_URL)
         resolved_api_key = api_key or (os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
@@ -81,6 +80,7 @@ class ChatClient:
 
         self.url = resolved_url
         self.model = model
+        self.target_model = self._select_target_model(resolved_url, self.model)
         self.api_key = resolved_api_key
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -109,13 +109,31 @@ class ChatClient:
             try:
                 instrument, warning = _build_instrument(
                     url=self.url,
-                    model=self.model,
+                    model=self.target_model,
                     api_key=self.api_key,
                 )
             except Exception:  # pragma: no cover - defensive fallback
                 instrument, warning = None, None
             self.instrument = instrument
             self.instrument_warning = warning
+
+    @staticmethod
+    def _select_target_model(url: str, model: str) -> str:
+        override = os.getenv("CENTRAL_TARGET_MODEL")
+        if override:
+            return override
+
+        url_lower = (url or "").lower()
+        model_lower = (model or "").lower()
+
+        if "api.openai.com" in url_lower:
+            if model_lower in {"centi-nox", "milli-nox", "micro-nox", "nano-nox"}:
+                return os.getenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+            if model_lower in {"gpt-5"}:
+                return os.getenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+            return model
+
+        return model
 
     # -----------------
     # Payload adapters
@@ -127,34 +145,45 @@ class ChatClient:
             return payload
 
         target_url = (self.url or "").lower()
-        # print(payload)
         if "openai.com" not in target_url:
             return payload
-        adjusted: Dict[str, Any] = dict(payload)
+        adjusted: Dict[str, Any] = {"model": self.target_model, "messages": []}
 
-        messages = adjusted.get("messages")
-        if isinstance(messages, list):
-            converted: List[Dict[str, Any]] = []
-            for message in messages:
-                if not isinstance(message, dict):
-                    continue
-                rewritten = dict(message)
-                content = rewritten.get("content")
-                if isinstance(content, str):
-                    rewritten["content"] = [{"type": "text", "text": content}]
-                elif isinstance(content, list):
-                    rewritten["content"] = deepcopy(content)
-                elif content is not None:
-                    rewritten["content"] = [{"type": "text", "text": str(content)}]
-                converted.append(rewritten)
-            adjusted["messages"] = converted
+        system_text = payload.get("system")
+        if system_text:
+            adjusted["messages"].append({"role": "system", "content": str(system_text)})
 
-        # if self.temperature is not None:
-        #     adjusted.setdefault("temperature", self.temperature)
+        def _flatten_content(content: Any) -> str:
+            if isinstance(content, list):
+                parts = []
+                for item in content:
+                    if isinstance(item, dict):
+                        text = item.get("text")
+                        if text is not None:
+                            parts.append(str(text))
+                        else:
+                            parts.append(str(item))
+                    elif item is not None:
+                        parts.append(str(item))
+                return "\n".join(parts)
+            if content is None:
+                return ""
+            return str(content)
 
+        for message in payload.get("messages") or []:
+            if not isinstance(message, dict):
+                continue
+            role = str(message.get("role") or "user")
+            content = _flatten_content(message.get("content"))
+            adjusted["messages"].append({"role": role, "content": content})
+
+        if not adjusted["messages"]:
+            adjusted["messages"] = [{"role": "user", "content": ""}]
+
+        if self.temperature is not None:
+            adjusted["temperature"] = self.temperature
         if self.max_tokens and self.max_tokens > 0:
-            adjusted.setdefault("max_tokens", self.max_tokens)
-
+            adjusted["max_tokens"] = self.max_tokens
         if stream:
             adjusted["stream"] = True
 
@@ -271,7 +300,7 @@ class ChatClient:
             assistant = instrument_response.text
         else:
             payload = build_payload(
-                model=self.model,
+                model=self.target_model,
                 messages=turn_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
@@ -400,6 +429,7 @@ class ChatClient:
             "sanitize": bool(self.sanitize),
             "strip_reasoning": bool(self.strip_reasoning),
             "logging_enabled": self.logger is not None,
+            "target_model": self.target_model,
             "has_api_key": bool(self.api_key),
             "instrument": getattr(self.instrument, "name", None),
             "instrument_warning": self.instrument_warning,

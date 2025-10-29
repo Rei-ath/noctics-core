@@ -16,8 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from central.core import ChatClient
-from central.colors import color
+from central.core import ChatClient  # noqa: E402
+from central.colors import color  # noqa: E402
 
 DATASET_DIR = Path("datasets/self_loop")
 DATASET_JSONL = DATASET_DIR / "self_loop.jsonl"

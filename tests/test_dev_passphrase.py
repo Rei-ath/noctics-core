@@ -1,5 +1,3 @@
-import os
-
 from central.cli import validate_dev_passphrase, require_dev_passphrase
 from central.cli import CENTRAL_DEV_PASSPHRASE_ATTEMPT_ENV
 

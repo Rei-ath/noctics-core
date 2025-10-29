@@ -8,7 +8,6 @@ common high-risk items: email, phone, credit card numbers, IPv4.
 from __future__ import annotations
 
 import re
-from typing import Callable
 
 # Precompile minimal regexes
 EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
