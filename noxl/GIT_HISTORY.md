@@ -11,7 +11,6 @@
 - `e8c6c13` (2025-10-06) Update central wiring during the GPT transition.
 - `b354974` (2025-10-03) Route the CLI through the `noctics_cli` package.
 - `a59ca7b` (2025-09-29) Miscellaneous maintenance ahead of wider changes.
-- `614579e` (2025-09-29) Stop tracking large binaries in the repository.
 - `cbf1956` (2025-09-27) Restore JSON output for archives.
 - `540ab9e` (2025-09-23) Refresh the CLI and supporting utilities.
 - `52944be` (2025-09-20) Refactor Nox and remove legacy `cllpy` integration.
