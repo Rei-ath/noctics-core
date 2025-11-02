@@ -5,15 +5,17 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from central.colors import color
-from noxl import (
-    archive_early_sessions as noxl_archive_early_sessions,
-    list_sessions as noxl_list_sessions,
-    load_session_messages,
-    merge_sessions_paths,
-    resolve_session,
-    set_session_title_for,
-)
+import noxl
 from interfaces.session_logger import format_session_display_name
+
+
+_ARCHIVE_AVAILABLE = hasattr(noxl, "archive_early_sessions")
+noxl_archive_early_sessions = getattr(noxl, "archive_early_sessions", None)
+noxl_list_sessions = noxl.list_sessions
+load_session_messages = noxl.load_session_messages
+merge_sessions_paths = noxl.merge_sessions_paths
+resolve_session = noxl.resolve_session
+set_session_title_for = noxl.set_session_title_for
 
 
 def list_sessions(
@@ -129,6 +131,14 @@ def merge_sessions(idents: List[str]) -> Optional[Path]:
 
 
 def archive_early_sessions() -> Optional[Path]:
+    if not _ARCHIVE_AVAILABLE or noxl_archive_early_sessions is None:
+        print(
+            color(
+                "Archive logic not available in this runtime; upgrade core_pinaries to enable it.",
+                fg="yellow",
+            )
+        )
+        return None
     out = noxl_archive_early_sessions()
     if out is None:
         print(color("Nothing to archive (need at least two sessions).", fg="yellow"))

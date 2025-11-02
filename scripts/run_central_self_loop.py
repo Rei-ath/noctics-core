@@ -77,7 +77,7 @@ def run_scenarios(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run Central self-improvement scenarios.")
+    parser = argparse.ArgumentParser(description="Run Nox self-improvement scenarios.")
     parser.add_argument(
         "--output-root",
         type=Path,
@@ -91,8 +91,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--display",
-        default="Central Self",
-        help="Memory user display name. Default: Central Self",
+        default="Nox Self",
+        help="Memory user display name. Default: Nox Self",
     )
     return parser.parse_args()
 

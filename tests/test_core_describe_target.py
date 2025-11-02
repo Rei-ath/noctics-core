@@ -4,7 +4,7 @@ from central.core import ChatClient
 
 
 def test_describe_target_reports_config(monkeypatch):
-    monkeypatch.delenv("CENTRAL_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("NOX_LLM_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     client = ChatClient(
@@ -39,8 +39,8 @@ def test_describe_target_reports_config(monkeypatch):
 def test_openai_model_mapping(monkeypatch):
     monkeypatch.setenv("NOCTICS_SKIP_DOTENV", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.delenv("CENTRAL_TARGET_MODEL", raising=False)
-    monkeypatch.setenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+    monkeypatch.delenv("NOX_TARGET_MODEL", raising=False)
+    monkeypatch.setenv("NOX_OPENAI_MODEL", "gpt-4o-mini")
 
     client = ChatClient(
         url="https://api.openai.com/v1/chat/completions",
@@ -51,13 +51,13 @@ def test_openai_model_mapping(monkeypatch):
     info = client.describe_target()
 
     assert info["model"] == "centi-nox"
-    assert info["target_model"] == os.getenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+    assert info["target_model"] == os.getenv("NOX_OPENAI_MODEL", "gpt-4o-mini")
 
 
 def test_openai_payload_structure(monkeypatch):
     monkeypatch.setenv("NOCTICS_SKIP_DOTENV", "1")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("NOX_OPENAI_MODEL", "gpt-4o-mini")
 
     client = ChatClient(
         url="https://api.openai.com/v1/chat/completions",

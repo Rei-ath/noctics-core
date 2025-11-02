@@ -12,7 +12,7 @@ class StubTransport:
     def send(self, payload, *, stream=False, on_chunk=None):
         self.calls += 1
         reply = (
-            "Noctics Central: Hardware context: OS: Linux; CPUs: 8; Memory: 7.6 GB\n"
+            "Nox: Hardware context: OS: Linux; CPUs: 8; Memory: 7.6 GB\n"
             "[INSTRUMENT RESULT]\nDetailed info for user\n[/INSTRUMENT RESULT]"
         )
         return reply, {"choices": [{"message": {"content": reply}}]}

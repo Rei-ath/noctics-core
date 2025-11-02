@@ -17,7 +17,7 @@ def test_extract_instrument_query_basic():
 
 
 def test_anonymize_for_instrument_redacts_pii_and_names(monkeypatch):
-    monkeypatch.setenv("CENTRAL_REDACT_NAMES", "Alice")
+    monkeypatch.setenv("NOX_REDACT_NAMES", "Alice")
     src = (
         "From: Alice <alice@example.com>\n"
         "Call me at +1-415-555-1212, IP 192.168.0.1.\n"

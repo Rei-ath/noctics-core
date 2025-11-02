@@ -1,4 +1,4 @@
-"""Central version information."""
+"""Nox version information."""
 
 from importlib import metadata
 

@@ -1,4 +1,4 @@
-"""Integrations and adapters for Noctics Central."""
+"""Integrations and adapters for Nox."""
 
 __all__ = [
     "dev_identity",

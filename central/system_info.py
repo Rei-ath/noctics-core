@@ -1,4 +1,4 @@
-"""Hardware/system information utilities for Central."""
+"""Hardware/system information utilities for Nox."""
 
 from __future__ import annotations
 

@@ -14,12 +14,12 @@ pip install --quiet --upgrade pip >/dev/null
 pip install --quiet -r "${REPO_ROOT}/requirements.txt" >/dev/null
 
 DEFAULT_MODEL=${MODEL_NAME:-noxllm-05b:latest}
-REQUESTED_MODEL=${CENTRAL_MODEL:-$DEFAULT_MODEL}
+REQUESTED_MODEL=${NOX_MODEL:-$DEFAULT_MODEL}
 DEFAULT_ENDPOINT="http://127.0.0.1:11434/api/generate"
-CENTRAL_LLM_URL=${CENTRAL_LLM_URL_OVERRIDE:-$DEFAULT_ENDPOINT}
-CENTRAL_LLM_MODEL=${CENTRAL_LLM_MODEL_OVERRIDE:-$REQUESTED_MODEL}
-export CENTRAL_LLM_URL
-export CENTRAL_LLM_MODEL
+NOX_LLM_URL=${NOX_LLM_URL_OVERRIDE:-$DEFAULT_ENDPOINT}
+NOX_LLM_MODEL=${NOX_LLM_MODEL_OVERRIDE:-$REQUESTED_MODEL}
+export NOX_LLM_URL
+export NOX_LLM_MODEL
 
 OLLAMA_REPO_URL=${OLLAMA_REPO_URL:-https://github.com/Rei-ath/ollama-mini.git}
 OLLAMA_ROOT="${REPO_ROOT}/inference"
@@ -85,12 +85,12 @@ start_ollama() {
     exit 1
   fi
 
-  ensure_model_available "$CENTRAL_LLM_MODEL"
+  ensure_model_available "$NOX_LLM_MODEL"
 }
 
 ensure_model_available() {
   local model_name="$1"
-  local pull_ref=${CENTRAL_MODEL:-$model_name}
+  local pull_ref=${NOX_MODEL:-$model_name}
 
   if "$OLLAMA_BIN" list | awk 'NR>1 {print $1}' | grep -Fxq "$model_name"; then
     return
@@ -114,7 +114,7 @@ ensure_model_available() {
 
 start_ollama
 
-echo "Inference endpoint: $CENTRAL_LLM_URL" >&2
-echo "Inference model:    $CENTRAL_LLM_MODEL" >&2
+echo "Inference endpoint: $NOX_LLM_URL" >&2
+echo "Inference model:    $NOX_LLM_MODEL" >&2
 
-python "${REPO_ROOT}/main.py" --stream --show-think --url "$CENTRAL_LLM_URL" --model "$CENTRAL_LLM_MODEL"
+python "${REPO_ROOT}/main.py" --stream --show-think --url "$NOX_LLM_URL" --model "$NOX_LLM_MODEL"

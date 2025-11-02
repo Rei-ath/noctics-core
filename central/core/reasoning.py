@@ -1,4 +1,4 @@
-"""Reasoning and output sanitisation utilities for Central."""
+"""Reasoning and output sanitisation utilities for Nox."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ _AUX_BLOCKS = [
     re.compile(r"\[INSTRUMENT\s+QUERY\].*?\[/INSTRUMENT\s+QUERY\]", re.IGNORECASE | re.DOTALL),
     re.compile(r"\[INSTRUMENT\s+RESULT\].*?\[/INSTRUMENT\s+RESULT\]", re.IGNORECASE | re.DOTALL),
 ]
-_CENTRAL_PREFIX = re.compile(r"^(?:Noctics\s+Central\s*[:：]\s*)+", re.IGNORECASE)
+_NOX_PREFIX = re.compile(r"^(?:(?:Noctics\s+)?Nox\s*[:：]\s*)+", re.IGNORECASE)
 _HARDWARE_PREFIX = re.compile(r"^hardware\s+context\s*:\s*", re.IGNORECASE)
 
 
@@ -71,8 +71,8 @@ def clean_public_reply(text: Optional[str]) -> Optional[str]:
     if not cleaned:
         return cleaned
 
-    # Drop repeated CLI label prefixes such as "Noctics Central:"
-    cleaned = _CENTRAL_PREFIX.sub("", cleaned, count=1).lstrip()
+    # Drop repeated CLI label prefixes such as "Nox:" or "Noctics Nox:"
+    cleaned = _NOX_PREFIX.sub("", cleaned, count=1).lstrip()
 
     def _unwrap_result_block(value: str) -> str:
         for pattern in (_INSTRUMENT_RESULT_BLOCK,):

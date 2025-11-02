@@ -9,8 +9,8 @@ from interfaces.dev_identity import DeveloperIdentity, resolve_developer_identit
 
 
 def test_resolve_from_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CENTRAL_DEV_NAME", "Rei")
-    monkeypatch.setenv("CENTRAL_DEV_ID", "rei_main")
+    monkeypatch.setenv("NOX_DEV_NAME", "Rei")
+    monkeypatch.setenv("NOX_DEV_ID", "rei_main")
     ident = resolve_developer_identity(project_name="Noctics Test", users_root=tmp_path)
     assert isinstance(ident, DeveloperIdentity)
     assert ident.user_id == "rei_main"
@@ -27,7 +27,7 @@ def test_resolve_from_user_meta(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         json.dumps({"id": "rei", "display_name": "Rei", "developer": True}),
         encoding="utf-8",
     )
-    monkeypatch.delenv("CENTRAL_DEV_NAME", raising=False)
+    monkeypatch.delenv("NOX_DEV_NAME", raising=False)
     monkeypatch.setenv("NOCTICS_PROJECT_NAME", "Noctics")
     ident = resolve_developer_identity(users_root=users_root)
     assert ident.display_name == "Rei"
@@ -35,9 +35,9 @@ def test_resolve_from_user_meta(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 def test_resolve_defaults_to_rei(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CENTRAL_DEV_NAME", raising=False)
+    monkeypatch.delenv("NOX_DEV_NAME", raising=False)
     monkeypatch.delenv("NOCTICS_DEV_NAME", raising=False)
-    monkeypatch.delenv("CENTRAL_USER_NAME", raising=False)
+    monkeypatch.delenv("NOX_USER_NAME", raising=False)
     ident = resolve_developer_identity(project_name="Noctics", users_root=tmp_path)
     assert ident.display_name == "Rei"
     assert ident.user_id == "rei"

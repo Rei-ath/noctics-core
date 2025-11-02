@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from central.colors import color
 from interfaces.dev_identity import resolve_developer_identity
 from interfaces.session_logger import USER_META_FILENAME
+from nox_env import get_env
 from noxl import USERS_ROOT
 
 __all__ = ["RuntimeIdentity", "resolve_runtime_identity"]
@@ -186,9 +186,8 @@ def resolve_runtime_identity(
     elif existing:
         display_name = existing[0]["display_name"]
     else:
-        display_name = (os.getenv("CENTRAL_USER_NAME") or "Guest").strip() or "Guest"
+        display_name = (get_env("NOX_USER_NAME") or "Guest").strip() or "Guest"
 
     user_id = _slugify_name(display_name)
     created = _ensure_user_profile(user_id, display_name, users_root=users_root)
     return RuntimeIdentity(user_id=user_id, display_name=display_name, created_user=created)
-

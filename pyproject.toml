@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "noctics-core"
 version = "0.1.39"
-description = "Local-first chat orchestrator powering the Noctics Central CLI"
+description = "Local-first chat orchestrator powering the Nox CLI"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{name = "Rei"}]

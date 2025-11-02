@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-improvement data builders for Central.
+"""Self-improvement data builders for Nox.
 
 This module exposes utilities for generating curated self-improvement sessions.
 ``generate_dataset_jsonl`` writes a JSONL corpus, while ``generate_memory_sessions``
@@ -9,7 +9,6 @@ logs them via SessionLogger so they appear as real memories.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,10 +16,11 @@ from typing import List
 
 from interfaces.session_logger import SessionLogger
 from central.persona import resolve_persona, render_system_prompt
+from nox_env import get_env
 
 SYSTEM_PROMPT_PATH = Path("memory/system_prompt.md")
 DEFAULT_SYSTEM_PROMPT = (
-    "You are {{CENTRAL_NAME}}, the {{NOX_VARIANT}} kernel safeguarding privacy while orchestrating Noctics."
+    "You are {{NOX_NAME}}, the {{NOX_VARIANT}} kernel safeguarding privacy while orchestrating Noctics."
 )
 
 DATASET_DIR = Path("datasets/self_improve")
@@ -49,7 +49,7 @@ SCENARIOS: List[Scenario] = [
         turns=[
             Turn(
                 user=(
-                    "Central, audit your instrument workflow for a tricky coding task. "
+                    "Nox, audit your instrument workflow for a tricky coding task. "
                     "Show the exact hand-off you would perform when you need external support."
                 ),
                 assistant=(
@@ -172,7 +172,7 @@ def load_system_prompt() -> str:
             prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip() or DEFAULT_SYSTEM_PROMPT
         except Exception:
             prompt = DEFAULT_SYSTEM_PROMPT
-    persona = resolve_persona(os.getenv("CENTRAL_LLM_MODEL"))
+    persona = resolve_persona(get_env("NOX_LLM_MODEL"))
     return render_system_prompt(prompt, persona)
 
 

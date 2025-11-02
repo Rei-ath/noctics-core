@@ -1,4 +1,4 @@
-"""Noctics Central core package."""
+"""Nox core package."""
 
 from __future__ import annotations
 

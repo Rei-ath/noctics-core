@@ -1,7 +1,8 @@
-"""Chat client implementation for Noctics Central."""
+"""Chat client implementation for Nox."""
 
 from __future__ import annotations
 
+import logging
 import os
 import socket
 from pathlib import Path
@@ -19,11 +20,12 @@ from noxl import (
 )
 
 from ..transport import LLMTransport
-from ..connector import CentralConnector, build_connector
+from ..connector import NoxConnector, build_connector
 from ..persona import resolve_persona
 from .instrument_prompt import load_instrument_prompt
 from .payloads import build_payload
 from .reasoning import clean_public_reply, extract_public_segments, strip_chain_of_thought
+from nox_env import get_env, require_env
 
 try:  # instruments package lives in the superproject
     from instruments import build_instrument as _build_instrument
@@ -45,7 +47,7 @@ class ChatClient:
         self,
         *,
         url: str | None = None,
-        model: str = os.getenv("CENTRAL_LLM_MODEL", "centi-nox"),
+        model: str | None = None,
         api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = -1,
@@ -57,7 +59,7 @@ class ChatClient:
         memory_user: Optional[str] = None,
         memory_user_display: Optional[str] = None,
         transport: Optional[LLMTransport] = None,
-        connector: Optional[CentralConnector] = None,
+        connector: Optional[NoxConnector] = None,
     ) -> None:
         if os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("NOCTICS_SKIP_DOTENV") != "1":
             try:
@@ -65,8 +67,13 @@ class ChatClient:
             except Exception:
                 pass
 
-        resolved_url = url or os.getenv("CENTRAL_LLM_URL", DEFAULT_URL)
-        resolved_api_key = api_key or (os.getenv("CENTRAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
+        resolved_url = url or get_env("NOX_LLM_URL")
+        if resolved_url is None:
+            raise RuntimeError(
+                "NOX_LLM_URL is not set. Define it in your .env file or export it before running Nox."
+            )
+
+        resolved_api_key = api_key or (get_env("NOX_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
 
         connector = connector or build_connector(url=resolved_url, api_key=resolved_api_key)
         self.connector = connector
@@ -79,7 +86,7 @@ class ChatClient:
         resolved_api_key = getattr(transport, "api_key", resolved_api_key)
 
         self.url = resolved_url
-        self.model = model
+        self.model = model or require_env("NOX_LLM_MODEL")
         self.target_model = self._select_target_model(resolved_url, self.model)
         self.api_key = resolved_api_key
         self.temperature = temperature
@@ -89,6 +96,7 @@ class ChatClient:
         self.messages: List[Dict[str, Any]] = list(messages or [])
         self.strip_reasoning = strip_reasoning
         self.persona = resolve_persona(self.model)
+        self.last_instrument_error: Optional[str] = None
 
         self.logger = (
             SessionLogger(
@@ -119,7 +127,7 @@ class ChatClient:
 
     @staticmethod
     def _select_target_model(url: str, model: str) -> str:
-        override = os.getenv("CENTRAL_TARGET_MODEL")
+        override = get_env("NOX_TARGET_MODEL")
         if override:
             return override
 
@@ -128,9 +136,9 @@ class ChatClient:
 
         if "api.openai.com" in url_lower:
             if model_lower in {"centi-nox", "milli-nox", "micro-nox", "nano-nox"}:
-                return os.getenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+                return get_env("NOX_OPENAI_MODEL") or "gpt-4o-mini"
             if model_lower in {"gpt-5"}:
-                return os.getenv("CENTRAL_OPENAI_MODEL", "gpt-4o-mini")
+                return get_env("NOX_OPENAI_MODEL") or "gpt-4o-mini"
             return model
 
         return model
@@ -140,9 +148,6 @@ class ChatClient:
     # -----------------
     def _prepare_payload(self, payload: Dict[str, Any], *, stream: bool) -> Dict[str, Any]:
         """Normalize payload details for specific providers."""
-
-        if self.instrument is not None:
-            return payload
 
         target_url = (self.url or "").lower()
         if "openai.com" not in target_url:
@@ -198,14 +203,14 @@ class ChatClient:
         parsed = urlparse(self.url)
         host = parsed.hostname
         if not host:
-            raise URLError(f"Invalid CENTRAL_LLM_URL (no host): {self.url}")
+            raise URLError(f"Invalid NOX_LLM_URL (no host): {self.url}")
 
         port = parsed.port or (443 if (parsed.scheme or "http").lower() == "https" else 80)
         try:
             with socket.create_connection((host, port), timeout=timeout):
                 return
         except Exception as exc:  # pragma: no cover - requires network issues
-            message = f"Unable to connect to Central at {host}:{port} ({type(exc).__name__}: {exc})."
+            message = f"Unable to connect to Nox at {host}:{port} ({type(exc).__name__}: {exc})."
             raise URLError(message)
 
     # ---------------------
@@ -289,16 +294,24 @@ class ChatClient:
 
         assistant: Optional[str] = None
 
+        instrument_error: Optional[str] = None
         if self.instrument is not None:
-            instrument_response = self.instrument.send_chat(
-                turn_messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
-                stream=bool(self.stream),
-                on_chunk=stream_callback,
-            )
-            assistant = instrument_response.text
-        else:
+            try:
+                instrument_response = self.instrument.send_chat(
+                    turn_messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
+                    stream=bool(self.stream),
+                    on_chunk=stream_callback,
+                )
+                assistant = instrument_response.text
+            except Exception as exc:  # pragma: no cover - defensive production fallback
+                instrument_error = f"Instrument '{getattr(self.instrument, 'name', 'unknown')}' failed: {exc}"
+                self.last_instrument_error = instrument_error
+                _LOGGER.warning(instrument_error)
+                assistant = None
+
+        if assistant is None:
             payload = build_payload(
                 model=self.target_model,
                 messages=turn_messages,
@@ -316,6 +329,8 @@ class ChatClient:
                 )
             else:
                 assistant, _ = self.transport.send(payload, stream=False)
+            if instrument_error:
+                self.instrument_warning = instrument_error
 
         if assistant is not None:
             if self.strip_reasoning:
@@ -370,17 +385,25 @@ class ChatClient:
         instrument_messages = list(self.messages)
         instrument_messages.append({"role": "system", "content": load_instrument_prompt()})
         instrument_messages.append({"role": "user", "content": instrument_wrapped})
-        reply: Optional[str]
+        reply: Optional[str] = None
+        instrument_error: Optional[str] = None
         if self.instrument is not None:
-            instrument_response = self.instrument.send_chat(
-                instrument_messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
-                stream=bool(self.stream),
-                on_chunk=on_delta,
-            )
-            reply = instrument_response.text
-        else:
+            try:
+                instrument_response = self.instrument.send_chat(
+                    instrument_messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
+                    stream=bool(self.stream),
+                    on_chunk=on_delta,
+                )
+                reply = instrument_response.text
+            except Exception as exc:  # pragma: no cover - defensive production fallback
+                instrument_error = f"Instrument '{getattr(self.instrument, 'name', 'unknown')}' failed: {exc}"
+                self.last_instrument_error = instrument_error
+                _LOGGER.warning(instrument_error)
+                reply = None
+
+        if reply is None:
             payload = build_payload(
                 model=self.model,
                 messages=instrument_messages,
@@ -394,6 +417,8 @@ class ChatClient:
                 reply, _ = self.transport.send(payload, stream=True, on_chunk=on_delta)
             else:
                 reply, _ = self.transport.send(payload, stream=False)
+            if instrument_error:
+                self.instrument_warning = instrument_error
 
         if reply is not None:
             if self.strip_reasoning:
@@ -467,3 +492,4 @@ class ChatClient:
 
 
 __all__ = ["ChatClient", "DEFAULT_URL"]
+_LOGGER = logging.getLogger("noctics.chat")

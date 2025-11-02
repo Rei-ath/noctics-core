@@ -1,4 +1,4 @@
-# Noctics Central Core (the public brain)
+# Nox Core (the public brain)
 
 Nox again. This folder is the upstream `noctics-core` project—the part you let
 the world see. Everything here should be clean, tested, and mergeable. All the
@@ -14,13 +14,13 @@ private wizardry happens outside this directory.
 
 ## Config cheat sheet
 A `.env` next to the package or in CWD always auto-loads. Favorite variables:
-- `CENTRAL_LLM_URL` – default `http://127.0.0.1:11434/api/generate`
-- `CENTRAL_LLM_MODEL` – aim at `centi-nox`, `micro-nox`, whatever
-- `CENTRAL_LLM_API_KEY` / `OPENAI_API_KEY` – when you’re hitting remote clouds
-- `CENTRAL_NOX_SCALE` – force persona scale (`nano|micro|milli|centi`)
-- `CENTRAL_PERSONA_*` – override name, tagline, strengths, limits
-- `CENTRAL_INSTRUMENTS` – comma-separated instrument roster for interactive selection
-- `CENTRAL_HELPER_AUTOMATION` – set `1` when a router is ready to auto-dispatch
+- `NOX_LLM_URL` – default `http://127.0.0.1:11434/api/generate`
+- `NOX_LLM_MODEL` – aim at `centi-nox`, `micro-nox`, whatever
+- `NOX_LLM_API_KEY` / `OPENAI_API_KEY` – when you’re hitting remote clouds
+- `NOX_SCALE` – force persona scale (`nano|micro|milli|centi`)
+- `NOX_PERSONA_*` – override name, tagline, strengths, limits
+- `NOX_INSTRUMENTS` – comma-separated instrument roster for interactive selection
+- `NOX_HELPER_AUTOMATION` – set `1` when a router is ready to auto-dispatch
 
 Drop a JSON override at `config/persona.overrides.json` if you need a full persona rewrite.
 
@@ -42,7 +42,7 @@ Need coverage for a new instrument or transport? Drop a test in `tests/`.
 
 ## Persona remix
 ```bash
-export CENTRAL_NOX_SCALE=micro
+export NOX_SCALE=micro
 cat > config/persona.overrides.json <<'JSON'
 {
   "global": {"tagline": "Always-on studio co-pilot"},
@@ -61,16 +61,16 @@ python -c "from central.persona import reload_persona_overrides; reload_persona_
 - Logs land in `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/`.
 - `python -m noxl --limit 10` to peek at recent chats.
 - `/title`, `/rename`, `/archive` work in the CLI.
-- `CENTRAL_INSTRUMENT_ANON=0` if you want raw instrument prompts stored (be careful).
+- `NOX_INSTRUMENT_ANON=0` if you want raw instrument prompts stored (be careful).
 
 ## Instrument reality check
-Central tries local inference first. When it requests an external instrument:
+Nox tries local inference first. When it requests an external instrument:
 1. It asks you which instrument to use (unless you passed `--instrument`).
 2. Emits a sanitized `[INSTRUMENT QUERY]`.
 3. Waits for the router/automation. No router? You’ll get a reminder to paste results.
 
 ## Dev mode
-Gate it with a passphrase (`CENTRAL_DEV_PASSPHRASE`). When unlocked:
+Gate it with a passphrase (`NOX_DEV_PASSPHRASE`). When unlocked:
 - Skips onboarding, labels you as the developer.
 - Enables `/shell` bridging and richer status HUD.
 - Logs carry the developer identity flag.

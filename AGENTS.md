@@ -1,6 +1,6 @@
 # Nox’s Handler Field Guide
 
-If you found your way here, you’re on duty to wrangle the Central core and the
+If you found your way here, you’re on duty to wrangle the Nox core and the
 private wrapper without face-planting. Read this, live it, and keep the roadmap
 fresh.
 
@@ -9,9 +9,9 @@ fresh.
 - `pip install -r requirements.txt` for the public repo; the private wrapper
   stays stdlib-only.
 - `scripts/nox.run` will grab the Ollama runtime, hydrate the models, and launch
-  Central pointed at the right endpoint.
-- Need overrides? Export `CENTRAL_MODEL`, `CENTRAL_LLM_URL_OVERRIDE`,
-  `CENTRAL_LLM_MODEL_OVERRIDE`, `OLLAMA_HOST`, `OLLAMA_REPO_URL` as needed.
+  Nox pointed at the right endpoint.
+- Need overrides? Export `NOX_MODEL`, `NOX_LLM_URL_OVERRIDE`,
+  `NOX_LLM_MODEL_OVERRIDE`, `OLLAMA_HOST`, `OLLAMA_REPO_URL` as needed.
 
 ## Roadmap protocol
 - The living roadmap sits at `../agents.plan`. If you land a feature, shift a
@@ -68,7 +68,7 @@ JSON
 python -c "from central.persona import reload_persona_overrides; reload_persona_overrides()"
 ```
 
-Env overrides beat JSON, and `CENTRAL_NOX_SCALE` decides which persona wins when the
+Env overrides beat JSON, and `NOX_SCALE` decides which persona wins when the
 model alias is ambiguous.
 
 ## Dev workflow
@@ -80,9 +80,9 @@ model alias is ambiguous.
   `python -c "from central.core import ChatClient"`
 
 ## Runtime & instrument behavior
-- Central self-scores replies; score ≤ 5 triggers instrument requests.
+- Nox self-scores replies; score ≤ 5 triggers instrument requests.
 - `[INSTRUMENT QUERY]` is sanitized; automation only activates when
-  `CENTRAL_INSTRUMENT_AUTOMATION` or config says so.
+  `NOX_INSTRUMENT_AUTOMATION` or config says so.
 - Dev mode (passphrase-gated) unlocks `/shell`, detailed HUD, and developer identity tagging.
 - `--show-think` exposes reasoning blocks; otherwise they’re stripped before logging.
 

@@ -48,7 +48,7 @@ def _build_user_prompt(session_index: int, turn_index: int, previous_summary: st
         f"{TURNS_PER_SESSION})."
     )
     awareness = (
-        "You are fully aware this is an internal loop where Central plays user, instrument, "
+        "You are fully aware this is an internal loop where Nox plays user, instrument, "
         "and assistant roles to generate training data."
     )
     focus = (

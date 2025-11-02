@@ -1,4 +1,4 @@
-# Central CLI Playbook (Nox commentary edition)
+# Nox CLI Playbook
 
 Launch the multitool with `python main.py` or `noctics chat`. It slurps `.env`,
 greets you, offers to restore a session, and then gets out of the way.
@@ -7,8 +7,8 @@ greets you, offers to restore a session, and then gets out of the way.
 
 | Flag | Why you’d flip it |
 |------|-------------------|
-| `--url` / `-U` | Point at a different endpoint (defaults to `CENTRAL_LLM_URL`). |
-| `--model` / `-M` | Label the target model (`CENTRAL_LLM_MODEL`). |
+| `--url` / `-U` | Point at a different endpoint (defaults to `NOX_LLM_URL`). |
+| `--model` / `-M` | Label the target model (`NOX_LLM_MODEL`). |
 | `--system` | Inject your own system message (otherwise we hunt the usual prompt files). |
 | `--user` / `-u` | Seed an opening user turn. |
 | `--messages` / `-F` | Load a JSON array of messages; system messages get persona-fied automatically. |
@@ -18,10 +18,10 @@ greets you, offers to restore a session, and then gets out of the way.
 | `--sanitize` | Scrub common PII before sending. |
 | `--raw` | In non-stream mode, also dump the raw JSON response. |
 | `--show-think` | Leak `<think>` reasoning blocks instead of hiding them. |
-| `--api-key` / `-k` | Direct API key (`CENTRAL_LLM_API_KEY` / `OPENAI_API_KEY`). |
+| `--api-key` / `-k` | Direct API key (`NOX_LLM_API_KEY` / `OPENAI_API_KEY`). |
 | `--instrument` | Set the label for external instruments (“claude”, “gpt-4o”, etc.). |
 | `--anon-instrument` / `--no-anon-instrument` | Toggle sanitized instrument queries (default obeys env). |
-| `--user-name` | Change the prompt label (“You” by default, overridable via `CENTRAL_USER_NAME`). |
+| `--user-name` | Change the prompt label (“You” by default, overridable via `NOX_USER_NAME`). |
 | `--dev` | Unlock developer mode (passphrase-gated). |
 | `--sessions-*` | All the session management tricks: list, load, rename, merge, latest, archive, browse, show. |
 | `--version` | Print the version and peace out. |
@@ -53,35 +53,35 @@ Tab completion is live for commands, instrument names, and session ids/indices.
 - The right panel shows a wrapped preview of the selected session’s recent turns.
 
 ## Instrument flow (how the magic routes)
-1. Central answers locally first.
+1. Nox answers locally first.
 2. If it needs help, it asks for an instrument label (respecting env/config rosters).
 3. It emits a sanitized `[INSTRUMENT QUERY] ... [/INSTRUMENT QUERY]`.
 4. No router? You’ll get instructions to handle it manually.
 5. With automation on, feed the response into `ChatClient.process_instrument_result` and
-   Central stitches `[INSTRUMENT RESULT] ...` back into the chat.
+   Nox stitches `[INSTRUMENT RESULT] ...` back into the chat.
 
 Env toggles:
 ```text
-CENTRAL_INSTRUMENTS                   # explicitly list instrument names
-CENTRAL_INSTRUMENT_AUTOMATION         # turn automation on (1/true/on)
-CENTRAL_INSTRUMENT_PLUGINS             # comma list of modules that call register_instrument
-CENTRAL_INSTRUMENT_ANON                # hide instrument prompts when logging
-CENTRAL_REDACT_NAMES                   # comma list of names to scrub
+NOX_INSTRUMENTS                   # explicitly list instrument names
+NOX_INSTRUMENT_AUTOMATION         # turn automation on (1/true/on)
+NOX_INSTRUMENT_PLUGINS             # comma list of modules that call register_instrument
+NOX_INSTRUMENT_ANON                # hide instrument prompts when logging
+NOX_REDACT_NAMES                   # comma list of names to scrub
 ```
 
 ## Developer mode perks
 - Prompt swaps to `memory/system_prompt.dev.*`
-- Central can emit `[DEV SHELL COMMAND]` blocks—CLI executes them and logs the `[DEV SHELL RESULT]`
+- Nox can emit `[DEV SHELL COMMAND]` blocks—CLI executes them and logs the `[DEV SHELL RESULT]`
 - `/shell <cmd>` available for manual runs
 - Identity label marks you as the developer (default: Rei)
 - Hardware stats + instrument roster get stapled onto the system prompt
 
-Passphrase order: `CENTRAL_DEV_PASSPHRASE`, config value, then default `jx0`.
+Passphrase order: `NOX_DEV_PASSPHRASE`, config value, then default `jx0`.
 
 ## First-run experience
 1. CLI lists known users, shows session titles, and asks if you want streaming.
 2. It seeds the system prompt with persona info + hardware context.
-3. On a completely fresh install, Central suggests a title and applies it automatically.
+3. On a completely fresh install, Nox suggests a title and applies it automatically.
 4. Titles can be changed anytime via `/title` or `[SET TITLE]New Name[/SET TITLE]`.
 
 ## Session handling
@@ -113,8 +113,8 @@ python -m noxl archive
 Use `--root PATH` to point at alternate directories like `memory/early-archives`.
 
 ## Config priorities
-1. Env vars (`CENTRAL_*`)
-2. JSON config (`config/central.json` or path in `CENTRAL_CONFIG`)
+1. Env vars (`NOX_*`)
+2. JSON config (`config/central.json` or path in `NOX_CONFIG`)
 3. Built-in defaults
 
 Example JSON:
@@ -140,7 +140,7 @@ python main.py --sessions-load session-20250913-234409 \
   --sessions-rename session-20250913-234409 "Midnight Debugging"
 
 # Developer mode with shell autopsy
-CENTRAL_DEV_PASSPHRASE=jx0 python main.py --dev --stream
+NOX_DEV_PASSPHRASE=jx0 python main.py --dev --stream
 ```
 
 Now you know the levers. Pull them responsibly—or not, I’ll still log everything.

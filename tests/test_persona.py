@@ -11,7 +11,7 @@ def test_resolve_persona_known_alias():
 
 
 def test_resolve_persona_env_override(monkeypatch):
-    monkeypatch.setenv("CENTRAL_NOX_SCALE", "micro")
+    monkeypatch.setenv("NOX_SCALE", "micro")
     persona = resolve_persona("unknown-model")
     assert persona.central_name == "micro-nox"
     assert persona.scale == "micro"
@@ -19,7 +19,7 @@ def test_resolve_persona_env_override(monkeypatch):
 
 def test_render_system_prompt_is_idempotent():
     persona = resolve_persona("centi-nox")
-    template = "Name {{CENTRAL_NAME}}\n{{NOX_PERSONA_STRENGTHS}}\n{{NOX_PERSONA_EMOJI}}"
+    template = "Name {{NOX_NAME}}\n{{NOX_PERSONA_STRENGTHS}}\n{{NOX_PERSONA_EMOJI}}"
     rendered = render_system_prompt(template, persona)
     assert "{{" not in rendered
     assert persona.central_name in rendered
@@ -46,7 +46,7 @@ def test_persona_override_file(monkeypatch, tmp_path: Path):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("CENTRAL_PERSONA_FILE", str(override_path))
+    monkeypatch.setenv("NOX_PERSONA_FILE", str(override_path))
     reload_persona_overrides()
     persona = resolve_persona("qwen3:0.6b")
     assert persona.central_name == "spark-nox"
@@ -57,10 +57,10 @@ def test_persona_override_file(monkeypatch, tmp_path: Path):
 
 
 def test_persona_environment_overrides(monkeypatch):
-    monkeypatch.delenv("CENTRAL_PERSONA_FILE", raising=False)
-    monkeypatch.setenv("CENTRAL_NOX_SCALE", "milli")
-    monkeypatch.setenv("CENTRAL_PERSONA_TAGLINE_MILLI", "Hand-crafted by Rei")
-    monkeypatch.setenv("CENTRAL_PERSONA_STRENGTHS", "Dev-mode wizardry|Design feedback")
+    monkeypatch.delenv("NOX_PERSONA_FILE", raising=False)
+    monkeypatch.setenv("NOX_SCALE", "milli")
+    monkeypatch.setenv("NOX_PERSONA_TAGLINE_MILLI", "Hand-crafted by Rei")
+    monkeypatch.setenv("NOX_PERSONA_STRENGTHS", "Dev-mode wizardry|Design feedback")
     reload_persona_overrides()
     persona = resolve_persona("ignored")
     assert persona.central_name == "milli-nox"

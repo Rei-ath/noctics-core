@@ -9,8 +9,8 @@ from central.cli import RuntimeIdentity, resolve_runtime_identity
 
 
 def test_resolve_runtime_identity_dev_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("CENTRAL_DEV_NAME", "DevUser")
-    monkeypatch.setenv("CENTRAL_DEV_ID", "dev_user")
+    monkeypatch.setenv("NOX_DEV_NAME", "DevUser")
+    monkeypatch.setenv("NOX_DEV_ID", "dev_user")
     identity = resolve_runtime_identity(
         dev_mode=True,
         initial_label="You",
@@ -27,7 +27,7 @@ def test_resolve_runtime_identity_dev_mode(monkeypatch: pytest.MonkeyPatch, tmp_
 
 def test_resolve_runtime_identity_interactive_user(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     tmp_users = tmp_path / "users"
-    monkeypatch.delenv("CENTRAL_USER_NAME", raising=False)
+    monkeypatch.delenv("NOX_USER_NAME", raising=False)
 
     inputs = iter(["Charlie"])
     monkeypatch.setattr("builtins.input", lambda _: next(inputs))
@@ -50,7 +50,7 @@ def test_resolve_runtime_identity_interactive_user(monkeypatch: pytest.MonkeyPat
 
 def test_resolve_runtime_identity_noninteractive_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     tmp_users = tmp_path / "users"
-    monkeypatch.delenv("CENTRAL_USER_NAME", raising=False)
+    monkeypatch.delenv("NOX_USER_NAME", raising=False)
 
     identity = resolve_runtime_identity(
         dev_mode=False,

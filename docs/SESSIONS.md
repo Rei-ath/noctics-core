@@ -1,6 +1,6 @@
 # Session Vault Manual (keep receipts like Nox)
 
-Central logs every turn so you never lose a thread. Here’s how the vault works and how to boss it around.
+Nox logs every turn so you never lose a thread. Here’s how the vault works and how to boss it around.
 
 ## Where everything lives
 - Default root: `~/.local/share/noctics/memory/`
@@ -22,7 +22,7 @@ Set `NOCTICS_MEMORY_HOME` if you want to park the vault somewhere else. On first
   - In chat: `/title My Topic`
   - CLI flag: `python main.py --sessions-rename session-YYYYMMDD-HHMMSS "My Topic"`
 - Rename saved sessions later with `/rename` or `--sessions-rename`.
-- Central can self-rename mid-chat via `[SET TITLE]New Name[/SET TITLE]`.
+- Nox can self-rename mid-chat via `[SET TITLE]New Name[/SET TITLE]`.
 
 ## Listing, loading, archiving
 | Action | Command |

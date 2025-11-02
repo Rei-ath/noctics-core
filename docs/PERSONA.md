@@ -1,6 +1,6 @@
 # Persona Remix Manual (Nox whispering in your ear)
 
-Central ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus a fallback `prime`). Each one tweaks how I introduce myself, flex strengths, and admit limits. You’re free to remix the vibe without touching source.
+Nox ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus a fallback `prime`). Each one tweaks how I introduce myself, flex strengths, and admit limits. You’re free to remix the vibe without touching source.
 
 ## Scale roll call
 | Scale | Default name | Alias | Model target | Best use |
@@ -13,11 +13,11 @@ Central ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus
 All inherit the same base attitude: straight shooter, loyal teammate, quick to call out shaky logic and just as quick to back you up.
 
 ## Override hierarchy
-1. JSON file (`config/persona.overrides.json` or path in `CENTRAL_PERSONA_FILE`)
-2. Environment variables (`CENTRAL_PERSONA_*`)
+1. JSON file (`config/persona.overrides.json` or path in `NOX_PERSONA_FILE`)
+2. Environment variables (`NOX_PERSONA_*`)
 3. Built-in catalog
 
-`CENTRAL_NOX_SCALE` forces which persona wins when the model alias is ambiguous.
+`NOX_SCALE` forces which persona wins when the model alias is ambiguous.
 
 ### Fields you can flip
 - `central_name`
@@ -59,10 +59,10 @@ to apply without restarting Python.
 
 ### Env quick tweaks
 ```bash
-export CENTRAL_NOX_SCALE=micro
-export CENTRAL_PERSONA_TAGLINE="Studio co-pilot"
-export CENTRAL_PERSONA_STRENGTHS="Knows Rei's dotfiles|Keeps dev shells tidy"
-export CENTRAL_PERSONA_LIMITS_CENTI="Needs extra GPU juice"
+export NOX_SCALE=micro
+export NOX_PERSONA_TAGLINE="Studio co-pilot"
+export NOX_PERSONA_STRENGTHS="Knows Rei's dotfiles|Keeps dev shells tidy"
+export NOX_PERSONA_LIMITS_CENTI="Needs extra GPU juice"
 ```
 Scale-specific env vars append `_SCALE` (case-insensitive).
 

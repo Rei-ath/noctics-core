@@ -1,4 +1,4 @@
-"""Network transport utilities for Central's ChatClient."""
+"""Network transport utilities for Nox's ChatClient."""
 
 from __future__ import annotations
 
@@ -59,15 +59,15 @@ class LLMTransport:
             message = _http_error_message(he, suffix=body)
             raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
         except URLError as ue:  # pragma: no cover - network specific
-            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
+            raise URLError(f"Failed to reach Nox at {self.url}: {ue.reason}")
         except OSError as oe:  # pragma: no cover - network specific
-            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
+            raise URLError(f"Network error talking to Nox at {self.url}: {oe}")
 
         try:
             obj = json.loads(body)
         except Exception as exc:
             raise URLError(
-                f"Central returned non-JSON response: {exc}\nBody: {body[:512]}"
+                f"Nox returned non-JSON response: {exc}\nBody: {body[:512]}"
             ) from exc  # pragma: no cover
 
         message: Optional[str]
@@ -87,9 +87,9 @@ class LLMTransport:
             message = _http_error_message(he, suffix=body)
             raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
         except URLError as ue:
-            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
+            raise URLError(f"Failed to reach Nox at {self.url}: {ue.reason}")
         except OSError as oe:
-            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
+            raise URLError(f"Network error talking to Nox at {self.url}: {oe}")
 
         lines = [line for line in body.splitlines() if line.strip()]
         responses: list[str] = []
@@ -149,9 +149,9 @@ class LLMTransport:
             message = _http_error_message(he)
             raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
         except URLError as ue:  # pragma: no cover - network specific
-            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
+            raise URLError(f"Failed to reach Nox at {self.url}: {ue.reason}")
         except OSError as oe:  # pragma: no cover - network specific
-            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
+            raise URLError(f"Network error talking to Nox at {self.url}: {oe}")
 
         return "".join(acc)
 
@@ -188,9 +188,9 @@ class LLMTransport:
             message = _http_error_message(he)
             raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
         except URLError as ue:
-            raise URLError(f"Failed to reach Central at {self.url}: {ue.reason}")
+            raise URLError(f"Failed to reach Nox at {self.url}: {ue.reason}")
         except OSError as oe:
-            raise URLError(f"Network error talking to Central at {self.url}: {oe}")
+            raise URLError(f"Network error talking to Nox at {self.url}: {oe}")
 
         return "".join(acc)
 
@@ -205,9 +205,9 @@ def _extract_error_body(error: HTTPError) -> str:
 def _http_error_message(error: HTTPError, *, suffix: str = "") -> str:
     status = getattr(error, "code", None)
     reason = getattr(error, "reason", "HTTP error")
-    message = f"HTTP {status or ''} {reason} from Central endpoint"
+    message = f"HTTP {status or ''} {reason} from Nox endpoint"
     if status == 401:
-        message += ": unauthorized (set CENTRAL_LLM_API_KEY or OPENAI_API_KEY?)"
+        message += ": unauthorized (set NOX_LLM_API_KEY or OPENAI_API_KEY?)"
     elif status == 404:
         message += ": endpoint not found (URL path invalid?)"
     if suffix:

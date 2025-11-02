@@ -1,4 +1,4 @@
-"""Instrument follow-up prompt loading utilities for Central."""
+"""Instrument follow-up prompt loading utilities for Nox."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Optional
 __all__ = ["load_instrument_prompt"]
 
 _DEFAULT_PROMPT = (
-    "You are **Central**, acting as a structured explainer and code provider.\n"
+    "You are **Nox**, acting as a structured explainer and code provider.\n"
     "You always work with a JSON object where each key contains two fields:\n"
     "- \"point\" → human explanation (not copyable)\n"
     "- \"copy\" → Python code snippet (safe for the user to copy-paste)\n\n"

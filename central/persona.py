@@ -1,18 +1,19 @@
-"""Persona metadata, overrides, and prompt rendering for Noctics Central."""
+"""Persona metadata, overrides, and prompt rendering for Nox."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Iterable, Optional
 
+from nox_env import get_env
+
 __all__ = ["NoxPersona", "resolve_persona", "render_system_prompt", "reload_persona_overrides"]
 
-_PERSONA_FILE_ENV = "CENTRAL_PERSONA_FILE"
+_PERSONA_FILE_ENV = "NOX_PERSONA_FILE"
 _PERSONA_DEFAULT_LOCATIONS: tuple[Path, ...] = (
     Path("config/persona.overrides.json"),
     Path("persona.override.json"),
@@ -32,7 +33,7 @@ _OVERRIDE_FIELD_ALIASES: Dict[str, tuple[str, ...]] = {
 
 @dataclass(frozen=True)
 class NoxPersona:
-    """Scale-aware identity for Central."""
+    """Scale-aware identity for Nox."""
 
     scale: str
     central_name: str
@@ -194,7 +195,7 @@ def _lookup_scale(token: str) -> Optional[str]:
 
 
 def _candidate_persona_paths() -> Iterable[Path]:
-    env_path = os.getenv(_PERSONA_FILE_ENV)
+    env_path = get_env(_PERSONA_FILE_ENV)
     if env_path:
         yield Path(env_path).expanduser()
     for path in _PERSONA_DEFAULT_LOCATIONS:
@@ -273,16 +274,16 @@ def _env_override(scale: str) -> Dict[str, object]:
     result: Dict[str, object] = {}
     upper = scale.upper()
     env_map = {
-        "central_name": ("CENTRAL_PERSONA_NAME", f"CENTRAL_PERSONA_NAME_{upper}"),
-        "variant_name": ("CENTRAL_PERSONA_VARIANT", f"CENTRAL_PERSONA_VARIANT_{upper}"),
-        "model_target": ("CENTRAL_PERSONA_MODEL", f"CENTRAL_PERSONA_MODEL_{upper}"),
-        "parameter_label": ("CENTRAL_PERSONA_PARAMETERS", f"CENTRAL_PERSONA_PARAMETERS_{upper}"),
-        "tagline": ("CENTRAL_PERSONA_TAGLINE", f"CENTRAL_PERSONA_TAGLINE_{upper}"),
-        "strengths": ("CENTRAL_PERSONA_STRENGTHS", f"CENTRAL_PERSONA_STRENGTHS_{upper}"),
-        "limits": ("CENTRAL_PERSONA_LIMITS", f"CENTRAL_PERSONA_LIMITS_{upper}"),
+        "central_name": ("NOX_PERSONA_NAME", f"NOX_PERSONA_NAME_{upper}"),
+        "variant_name": ("NOX_PERSONA_VARIANT", f"NOX_PERSONA_VARIANT_{upper}"),
+        "model_target": ("NOX_PERSONA_MODEL", f"NOX_PERSONA_MODEL_{upper}"),
+        "parameter_label": ("NOX_PERSONA_PARAMETERS", f"NOX_PERSONA_PARAMETERS_{upper}"),
+        "tagline": ("NOX_PERSONA_TAGLINE", f"NOX_PERSONA_TAGLINE_{upper}"),
+        "strengths": ("NOX_PERSONA_STRENGTHS", f"NOX_PERSONA_STRENGTHS_{upper}"),
+        "limits": ("NOX_PERSONA_LIMITS", f"NOX_PERSONA_LIMITS_{upper}"),
     }
     for attr, (base_key, scale_key) in env_map.items():
-        raw = os.getenv(scale_key) or os.getenv(base_key)
+        raw = get_env(scale_key) or get_env(base_key)
         if raw is None:
             continue
         if attr in {"strengths", "limits"}:
@@ -310,7 +311,7 @@ def resolve_persona(model_name: Optional[str], *, scale_override: Optional[str] 
 
     candidates = [
         scale_override or "",
-        os.getenv("CENTRAL_NOX_SCALE", ""),
+        get_env("NOX_SCALE") or "",
         model_name or "",
     ]
     persona = None
@@ -344,7 +345,7 @@ def render_system_prompt(template: Optional[str], persona: NoxPersona) -> Option
         return template
 
     replacements = {
-        "{{CENTRAL_NAME}}": persona.central_name,
+        "{{NOX_NAME}}": persona.central_name,
         "{{NOX_VARIANT}}": persona.variant_name,
         "{{NOX_VARIANT_DISPLAY}}": persona.variant_display,
         "{{NOX_SCALE}}": persona.scale,

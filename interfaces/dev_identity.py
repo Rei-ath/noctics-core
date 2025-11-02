@@ -1,20 +1,20 @@
-"""Developer identity utilities for Central."""
+"""Developer identity utilities for Nox."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
+from nox_env import get_env
 from noxl.sessions import USERS_ROOT, USER_META_FILENAME
 
 
 @dataclass(slots=True)
 class DeveloperIdentity:
-    """Resolved identity information for the Central developer."""
+    """Resolved identity information for the Nox developer."""
 
     user_id: str
     display_name: str
@@ -40,18 +40,18 @@ def resolve_developer_identity(
     """Return the developer identity, falling back to sensible defaults.
 
     Resolution order:
-    1. Environment variables (`CENTRAL_DEV_NAME`, `CENTRAL_DEV_ID`, `CENTRAL_DEV_DISPLAY`).
+    1. Environment variables (`NOX_DEV_NAME`, `NOX_DEV_ID`, `NOX_DEV_DISPLAY`).
     2. User metadata under ``memory/users`` with ``developer: true``.
-    3. User metadata with id/display matching "rei".
-    4. `CENTRAL_USER_NAME` if set.
+    3. User metadata with id/display matching \"rei\".
+    4. `NOX_USER_NAME` if set.
     5. Final fallback to ``Rei``.
     """
 
-    project = project_name or os.getenv("NOCTICS_PROJECT_NAME", "Noctics")
+    project = project_name or get_env("NOX_PROJECT_NAME") or "Noctics"
 
-    env_name = (os.getenv("CENTRAL_DEV_NAME") or os.getenv("NOCTICS_DEV_NAME") or "").strip()
-    env_display = (os.getenv("CENTRAL_DEV_DISPLAY") or "").strip()
-    env_id = (os.getenv("CENTRAL_DEV_ID") or "").strip()
+    env_name = (get_env("NOX_DEV_NAME") or get_env("NOCTICS_DEV_NAME") or "").strip()
+    env_display = (get_env("NOX_DEV_DISPLAY") or "").strip()
+    env_id = (get_env("NOX_DEV_ID") or "").strip()
 
     if env_name:
         display = env_display or env_name
@@ -74,7 +74,7 @@ def resolve_developer_identity(
             user_id = _meta_user_id(meta, display)
             return DeveloperIdentity(user_id=user_id, display_name=display, project_name=project)
 
-    user_label = (os.getenv("CENTRAL_USER_NAME") or "").strip()
+    user_label = (get_env("NOX_USER_NAME") or "").strip()
     if user_label:
         user_id = _slugify(user_label)
         return DeveloperIdentity(user_id=user_id, display_name=user_label, project_name=project)

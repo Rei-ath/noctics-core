@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import List, Optional
 
 from central.colors import color
 from central.config import get_runtime_config
 from interfaces.pii import sanitize as pii_sanitize
+from nox_env import get_env
 
 # -----------------------------
 # Instrument query anonymization
@@ -32,7 +32,7 @@ def anonymize_for_instrument(text: str, *, user_name: Optional[str] = None) -> s
     """Sanitize an instrument query to avoid leaking user identity.
 
     - Applies PII redaction (emails, phones, cards via Luhn-like, IPv4).
-    - Optionally redacts configured names from env `CENTRAL_REDACT_NAMES` (comma-separated).
+    - Optionally redacts configured names from env `NOX_REDACT_NAMES` (comma-separated).
     - Optionally redacts the interactive prompt label if provided via `user_name`.
     """
     # Base PII sanitization
@@ -44,7 +44,7 @@ def anonymize_for_instrument(text: str, *, user_name: Optional[str] = None) -> s
         out = re.sub(re.escape(label), "[REDACTED:NAME]", out, flags=re.IGNORECASE)
 
     # Redact additional names from env
-    extra = os.getenv("CENTRAL_REDACT_NAMES", "")
+    extra = get_env("NOX_REDACT_NAMES") or ""
     for raw in [s.strip() for s in extra.split(",") if s.strip()]:
         out = re.sub(re.escape(raw), "[REDACTED:NAME]", out, flags=re.IGNORECASE)
 
@@ -67,7 +67,7 @@ def get_instrument_candidates() -> List[str]:
 
     env_instruments = [
         s.strip()
-        for s in (os.getenv("CENTRAL_INSTRUMENTS") or "").split(",")
+        for s in (get_env("NOX_INSTRUMENTS") or "").split(",")
         if s.strip()
     ]
     if env_instruments:
@@ -95,7 +95,7 @@ def get_instrument_candidates() -> List[str]:
 def instrument_automation_enabled() -> bool:
     """Return True if automatic instrument stitching is available."""
 
-    value = os.getenv("CENTRAL_INSTRUMENT_AUTOMATION", "").strip()
+    value = (get_env("NOX_INSTRUMENT_AUTOMATION") or "").strip()
     if value:
         return value.lower() in {"1", "true", "on", "yes"}
     return get_runtime_config().instrument.automation

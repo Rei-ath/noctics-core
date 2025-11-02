@@ -1,4 +1,4 @@
-"""Public interface for the Central chat client package."""
+"""Public interface for the Nox chat client package."""
 
 from __future__ import annotations
 

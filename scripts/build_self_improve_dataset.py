@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Generate a synthetic self-improvement dataset for Central.
+"""Generate a synthetic self-improvement dataset for Nox.
 
-The script writes curated conversations that demonstrate Central's
+The script writes curated conversations that demonstrate Nox's
 core behaviours (privacy, instrument workflow, memory discipline,
 connectivity guidance, session management). Each conversation is treated as a
 "memory" sample suitable for fine-tuning or evaluation.
@@ -36,7 +36,7 @@ from typing import Iterable, List
 
 @dataclass(frozen=True)
 class Scenario:
-    """Represents a curated conversation describing Central's behaviour."""
+    """Represents a curated conversation describing Nox's behaviour."""
 
     identifier: str
     title: str
@@ -53,7 +53,7 @@ SCENARIOS: List[Scenario] = [
             {
                 "role": "user",
                 "content": (
-                    "Central, audit your instrument workflow for a tricky coding task. "
+                    "Nox, audit your instrument workflow for a tricky coding task. "
                     "Show the exact hand-off you would perform when you need external support."
                 ),
             },
@@ -228,7 +228,7 @@ def write_jsonl(records: Iterable[dict], output_path: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate a self-improvement dataset for Central.")
+    parser = argparse.ArgumentParser(description="Generate a self-improvement dataset for Nox.")
     parser.add_argument(
         "--output",
         type=Path,
