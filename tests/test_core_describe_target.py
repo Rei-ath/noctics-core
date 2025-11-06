@@ -29,9 +29,9 @@ def test_describe_target_reports_config(monkeypatch):
     assert info["has_api_key"] is False
     assert info["temperature"] == 0.3
     assert info["max_tokens"] == 256
-    assert info["central_name"] == "prime-nox"
+    assert info["central_name"] == "cloud-nox"
     assert info["central_scale"] == "prime"
-    assert info["noctics_variant"] == "noctics-prime"
+    assert info["noctics_variant"] == "noctics-cloud"
     assert info["model_target"] == "auto"
     assert info["target_model"] == "test-model"
 

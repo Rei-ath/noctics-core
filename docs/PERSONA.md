@@ -1,14 +1,15 @@
 # Persona Remix Manual (Nox whispering in your ear)
 
-Nox ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus a fallback `prime`). Each one tweaks how I introduce myself, flex strengths, and admit limits. You’re free to remix the vibe without touching source.
+Nox ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus a fallback `cloud` formerly known as `prime`). Each one tweaks how I introduce myself, flex strengths, and admit limits. You’re free to remix the vibe without touching source.
 
 ## Scale roll call
 | Scale | Default name | Alias | Model target | Best use |
 |-------|--------------|-------|--------------|----------|
-| nano  | nano-nox     | nano-nox  | qwen3:0.6b | Tiny boxes, instant answers. |
-| micro | micro-nox    | micro-nox | qwen3:1.7b | Daily driver for frantic dev loops. |
-| milli | milli-nox    | milli-nox | qwen3:4b   | Architecture debates, structured plans. |
-| centi | centi-nox    | centi-nox | qwen3:8b   | Long-form synthesis, research binges. |
+| nano  | nano-nox     | nano-nox      | qwen3:0.6b | Tiny boxes, instant answers. |
+| micro | micro-nox    | micro-nox     | qwen3:1.7b | Daily driver for frantic dev loops. |
+| milli | milli-nox    | milli-nox     | qwen3:4b   | Architecture debates, structured plans. |
+| centi | centi-nox    | centi-nox     | qwen3:8b   | Long-form synthesis, research binges. |
+| cloud | cloud-nox    | noctics-cloud | auto       | Remote/cloud runtimes, unspecified scale. |
 
 All inherit the same base attitude: straight shooter, loyal teammate, quick to call out shaky logic and just as quick to back you up.
 

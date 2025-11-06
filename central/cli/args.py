@@ -1,5 +1,7 @@
-"""Compatibility shim: central.cli.args moved to `noctics_cli.args`."""
+"""Argument parser definitions for the lightweight core CLI."""
 
 from __future__ import annotations
 
-from noctics_cli.args import *  # noqa: F401,F403
+from .simple import build_parser, parse_args
+
+__all__ = ["build_parser", "parse_args"]

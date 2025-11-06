@@ -147,13 +147,13 @@ PERSONA_CATALOG: Dict[str, NoxPersona] = {
 
 DEFAULT_PERSONA = NoxPersona(
     scale="prime",
-    central_name="prime-nox",
-    variant_name="noctics-prime",
+    central_name="cloud-nox",
+    variant_name="noctics-cloud",
     model_target="auto",
     parameter_label="unspecified capacity",
-    tagline="Adaptive kernel that inherits classic Nox behavior when the scale is unknown.",
+    tagline="Cloud bridge persona that keeps Nox steady when the runtime lives off-box.",
     strengths=(
-        "Maintains privacy-first coordination while adapting to whichever model is configured.",
+        "Maintains privacy-first coordination while adapting to whichever remote model is configured.",
         "Provides dependable guidance across CLI workflows and instrument orchestration.",
     ),
     limits=(

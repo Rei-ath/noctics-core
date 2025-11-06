@@ -1,9 +1,7 @@
-"""Compatibility shim: central.cli.app moved to `noctics_cli.app`."""
+"""Minimal CLI facade retained for backwards compatibility."""
 
 from __future__ import annotations
 
-from noctics_cli import app as _app
-from noctics_cli.app import *  # noqa: F401,F403
+from .simple import build_parser, main, parse_args
 
-# Legacy consumers expect this module via the old path.
-_extract_visible_reply = _app._extract_visible_reply
+__all__ = ["build_parser", "main", "parse_args"]

@@ -1,25 +1,7 @@
-"""Compatibility facade for the CLI now hosted in the top-level `noctics_cli` package."""
+"""Lightweight CLI entrypoints bundled with the public core package."""
 
 from __future__ import annotations
 
-from noctics_cli import (
-    NOX_DEV_PASSPHRASE_ATTEMPT_ENV,
-    RuntimeIdentity,
-    main,
-    parse_args,
-    require_dev_passphrase,
-    resolve_dev_passphrase,
-    resolve_runtime_identity,
-    validate_dev_passphrase,
-)
+from .simple import build_parser, main, parse_args
 
-__all__ = [
-    "main",
-    "parse_args",
-    "RuntimeIdentity",
-    "resolve_runtime_identity",
-    "NOX_DEV_PASSPHRASE_ATTEMPT_ENV",
-    "require_dev_passphrase",
-    "resolve_dev_passphrase",
-    "validate_dev_passphrase",
-]
+__all__ = ["build_parser", "main", "parse_args"]

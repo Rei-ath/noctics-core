@@ -11,10 +11,14 @@ from typing import Sequence
 
 
 def _run(argv: Sequence[str]) -> int:
-    """Delegate to the shared CLI entrypoint."""
+    """Delegate to the shared CLI entrypoint, falling back to the bundled core CLI."""
 
-    from noctics_cli.multitool import main as cli_main
+    try:
+        from noctics_cli.multitool import main as cli_main  # type: ignore
+    except ImportError:
+        from central.cli.simple import main as core_cli_main
 
+        return core_cli_main(list(argv))
     return cli_main(list(argv))
 
 

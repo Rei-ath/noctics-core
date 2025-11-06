@@ -125,6 +125,71 @@ class ChatClient:
             self.instrument = instrument
             self.instrument_warning = warning
 
+    # -----------------
+    # Internal helpers
+    # -----------------
+    def _sanitize_user_text(self, text: str) -> str:
+        """Apply PII scrubbing when the client runs in sanitize mode."""
+
+        return pii_sanitize(text) if self.sanitize else text
+
+    def _log_turn(self, user_content: str, assistant_content: str) -> None:
+        """Persist a turn to the session log, including the active system prompt."""
+
+        if not self.logger:
+            return
+        sys_msgs = [m for m in self.messages if m.get("role") == "system"]
+        to_log = (sys_msgs[-1:] if sys_msgs else []) + [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": assistant_content},
+        ]
+        self.logger.log_turn(to_log)
+
+    def _append_turn(self, user_content: str, assistant_content: str) -> None:
+        """Append the latest user/assistant exchange to memory and logs."""
+
+        self.messages.append({"role": "user", "content": user_content})
+        self.messages.append({"role": "assistant", "content": assistant_content})
+        self._log_turn(user_content, assistant_content)
+
+    def _call_instrument(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Try the automation instrument first, returning (reply, error)."""
+
+        if self.instrument is None:
+            return None, None
+        try:
+            instrument_response = self.instrument.send_chat(
+                messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
+                stream=bool(self.stream),
+                on_chunk=on_chunk,
+            )
+        except Exception as exc:  # pragma: no cover - defensive production fallback
+            error = f"Instrument '{getattr(self.instrument, 'name', 'unknown')}' failed: {exc}"
+            self.last_instrument_error = error
+            _LOGGER.warning(error)
+            return None, error
+        return instrument_response.text, None
+
+    def _dispatch_payload(
+        self,
+        payload: Dict[str, Any],
+        *,
+        stream: bool,
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> tuple[Optional[str], Any]:
+        """Send payload through the configured transport."""
+
+        if stream:
+            return self.transport.send(payload, stream=True, on_chunk=on_chunk)
+        return self.transport.send(payload, stream=False)
+
     @staticmethod
     def _select_target_model(url: str, model: str) -> str:
         override = get_env("NOX_TARGET_MODEL")
@@ -272,7 +337,7 @@ class ChatClient:
         *,
         on_delta: Optional[Callable[[str], None]] = None,
     ) -> Optional[str]:
-        to_send_user = pii_sanitize(user_text) if self.sanitize else user_text
+        to_send_user = self._sanitize_user_text(user_text)
         turn_messages = self.messages + [{"role": "user", "content": to_send_user}]
         stream_callback = on_delta
         public_state: Dict[str, Any] = {}
@@ -294,22 +359,7 @@ class ChatClient:
 
         assistant: Optional[str] = None
 
-        instrument_error: Optional[str] = None
-        if self.instrument is not None:
-            try:
-                instrument_response = self.instrument.send_chat(
-                    turn_messages,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
-                    stream=bool(self.stream),
-                    on_chunk=stream_callback,
-                )
-                assistant = instrument_response.text
-            except Exception as exc:  # pragma: no cover - defensive production fallback
-                instrument_error = f"Instrument '{getattr(self.instrument, 'name', 'unknown')}' failed: {exc}"
-                self.last_instrument_error = instrument_error
-                _LOGGER.warning(instrument_error)
-                assistant = None
+        assistant, instrument_error = self._call_instrument(turn_messages, on_chunk=stream_callback)
 
         if assistant is None:
             payload = build_payload(
@@ -321,14 +371,11 @@ class ChatClient:
             )
             payload = self._prepare_payload(payload, stream=bool(self.stream))
 
-            if self.stream:
-                assistant, _ = self.transport.send(
-                    payload,
-                    stream=True,
-                    on_chunk=stream_callback,
-                )
-            else:
-                assistant, _ = self.transport.send(payload, stream=False)
+            assistant, _ = self._dispatch_payload(
+                payload,
+                stream=bool(self.stream),
+                on_chunk=stream_callback,
+            )
             if instrument_error:
                 self.instrument_warning = instrument_error
 
@@ -345,33 +392,17 @@ class ChatClient:
                     if len(assistant) > len(public_text):
                         on_delta(assistant[len(public_text):])
             assistant = clean_public_reply(assistant) or ""
-            self.messages.append({"role": "user", "content": to_send_user})
-            self.messages.append({"role": "assistant", "content": assistant})
-            if self.logger:
-                sys_msgs = [m for m in self.messages if m.get("role") == "system"]
-                to_log = (sys_msgs[-1:] if sys_msgs else []) + [
-                    {"role": "user", "content": to_send_user},
-                    {"role": "assistant", "content": assistant},
-                ]
-                self.logger.log_turn(to_log)
+            self._append_turn(to_send_user, assistant)
         return assistant
 
     def record_turn(self, user_text: str, assistant_text: str) -> None:
         """Record an assistant response without calling the API."""
 
-        to_send_user = pii_sanitize(user_text) if self.sanitize else user_text
+        to_send_user = self._sanitize_user_text(user_text)
         if self.strip_reasoning:
             assistant_text = strip_chain_of_thought(assistant_text)
         assistant_text = clean_public_reply(assistant_text) or ""
-        self.messages.append({"role": "user", "content": to_send_user})
-        self.messages.append({"role": "assistant", "content": assistant_text})
-        if self.logger:
-            sys_msgs = [m for m in self.messages if m.get("role") == "system"]
-            to_log = (sys_msgs[-1:] if sys_msgs else []) + [
-                {"role": "user", "content": to_send_user},
-                {"role": "assistant", "content": assistant_text},
-            ]
-            self.logger.log_turn(to_log)
+        self._append_turn(to_send_user, assistant_text)
 
     def process_instrument_result(
         self,
@@ -386,22 +417,7 @@ class ChatClient:
         instrument_messages.append({"role": "system", "content": load_instrument_prompt()})
         instrument_messages.append({"role": "user", "content": instrument_wrapped})
         reply: Optional[str] = None
-        instrument_error: Optional[str] = None
-        if self.instrument is not None:
-            try:
-                instrument_response = self.instrument.send_chat(
-                    instrument_messages,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens if self.max_tokens and self.max_tokens > 0 else None,
-                    stream=bool(self.stream),
-                    on_chunk=on_delta,
-                )
-                reply = instrument_response.text
-            except Exception as exc:  # pragma: no cover - defensive production fallback
-                instrument_error = f"Instrument '{getattr(self.instrument, 'name', 'unknown')}' failed: {exc}"
-                self.last_instrument_error = instrument_error
-                _LOGGER.warning(instrument_error)
-                reply = None
+        reply, instrument_error = self._call_instrument(instrument_messages, on_chunk=on_delta)
 
         if reply is None:
             payload = build_payload(
@@ -413,10 +429,11 @@ class ChatClient:
             )
             payload = self._prepare_payload(payload, stream=bool(self.stream))
 
-            if self.stream:
-                reply, _ = self.transport.send(payload, stream=True, on_chunk=on_delta)
-            else:
-                reply, _ = self.transport.send(payload, stream=False)
+            reply, _ = self._dispatch_payload(
+                payload,
+                stream=bool(self.stream),
+                on_chunk=on_delta,
+            )
             if instrument_error:
                 self.instrument_warning = instrument_error
 
@@ -424,15 +441,7 @@ class ChatClient:
             if self.strip_reasoning:
                 reply = strip_chain_of_thought(reply)
             reply = clean_public_reply(reply) or ""
-            self.messages.append({"role": "user", "content": instrument_wrapped})
-            self.messages.append({"role": "assistant", "content": reply})
-            if self.logger:
-                sys_msgs = [m for m in self.messages if m.get("role") == "system"]
-                to_log = (sys_msgs[-1:] if sys_msgs else []) + [
-                    {"role": "user", "content": instrument_wrapped},
-                    {"role": "assistant", "content": reply},
-                ]
-                self.logger.log_turn(to_log)
+            self._append_turn(instrument_wrapped, reply)
         return reply
 
     # -----------------
