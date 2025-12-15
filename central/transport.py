@@ -25,6 +25,9 @@ class LLMTransport:
         send_payload = dict(payload)
         if "/api/generate" in self.url:
             send_payload.pop("messages", None)
+        if "/api/chat" in self.url:
+            send_payload.pop("prompt", None)
+            send_payload.pop("system", None)
         data = json.dumps(send_payload).encode("utf-8")
         headers = self._headers(stream=stream)
         req = Request(self.url, data=data, headers=headers, method="POST")
@@ -33,6 +36,11 @@ class LLMTransport:
                 text = self._stream_generate(req, on_chunk)
                 return text, None
             return self._request_generate(req)
+        if "/api/chat" in self.url:
+            if stream:
+                text = self._stream_ollama_chat(req, on_chunk)
+                return text, None
+            return self._request_ollama_chat(req)
         if stream:
             text = self._stream_sse(req, on_chunk)
             return text, None
@@ -107,6 +115,44 @@ class LLMTransport:
                 responses.append(text)
         return ("".join(responses) if responses else None, {"responses": payloads})
 
+    def _request_ollama_chat(self, req: Request) -> Tuple[Optional[str], Dict[str, Any]]:
+        try:
+            with urlopen(req) as resp:  # nosec - local/dev usage
+                charset = resp.headers.get_content_charset() or "utf-8"
+                body = resp.read().decode(charset)
+        except HTTPError as he:  # pragma: no cover - network specific
+            body = _extract_error_body(he)
+            message = _http_error_message(he, suffix=body)
+            raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
+        except URLError as ue:  # pragma: no cover - network specific
+            raise URLError(f"Failed to reach Nox at {self.url}: {ue.reason}")
+        except OSError as oe:  # pragma: no cover - network specific
+            raise URLError(f"Network error talking to Nox at {self.url}: {oe}")
+
+        try:
+            obj = json.loads(body)
+        except Exception as exc:
+            raise URLError(
+                f"Nox returned non-JSON response: {exc}\nBody: {body[:512]}"
+            ) from exc  # pragma: no cover
+
+        if isinstance(obj, dict) and obj.get("error"):
+            raise URLError(str(obj["error"]))
+
+        message: Optional[str] = None
+        if isinstance(obj, dict):
+            msg = obj.get("message")
+            if isinstance(msg, dict):
+                content = msg.get("content")
+                if isinstance(content, str):
+                    message = content
+            if message is None:
+                content = obj.get("response")
+                if isinstance(content, str):
+                    message = content
+
+        return message, obj
+
     def _stream_sse(
         self,
         req: Request,
@@ -145,6 +191,50 @@ class LLMTransport:
                         buffer.append(line[len("data:"):].lstrip())
                         continue
                     buffer.clear()
+        except HTTPError as he:  # pragma: no cover - network specific
+            message = _http_error_message(he)
+            raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
+        except URLError as ue:  # pragma: no cover - network specific
+            raise URLError(f"Failed to reach Nox at {self.url}: {ue.reason}")
+        except OSError as oe:  # pragma: no cover - network specific
+            raise URLError(f"Network error talking to Nox at {self.url}: {oe}")
+
+        return "".join(acc)
+
+    def _stream_ollama_chat(
+        self,
+        req: Request,
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> str:
+        try:
+            with urlopen(req) as resp:  # nosec - local/dev usage
+                charset = resp.headers.get_content_charset() or "utf-8"
+                acc: list[str] = []
+                while True:
+                    line_bytes = resp.readline()
+                    if not line_bytes:
+                        break
+                    line = line_bytes.decode(charset, errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("error"):
+                        raise URLError(str(data["error"]))
+                    text = None
+                    msg = data.get("message")
+                    if isinstance(msg, dict):
+                        text = msg.get("content")
+                    if not text:
+                        text = data.get("response")
+                    if text:
+                        acc.append(text)
+                        if on_chunk:
+                            on_chunk(text)
+                    if data.get("done"):
+                        break
         except HTTPError as he:  # pragma: no cover - network specific
             message = _http_error_message(he)
             raise HTTPError(req.full_url, he.code, message, he.headers, he.fp)
