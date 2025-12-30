@@ -29,10 +29,10 @@ def test_describe_target_reports_config(monkeypatch):
     assert info["has_api_key"] is False
     assert info["temperature"] == 0.3
     assert info["max_tokens"] == 256
-    assert info["central_name"] == "cloud-nox"
-    assert info["central_scale"] == "prime"
-    assert info["noctics_variant"] == "noctics-cloud"
-    assert info["model_target"] == "auto"
+    assert info["central_name"] == "nox"
+    assert info["central_scale"] == "nox"
+    assert info["noctics_variant"] == "nox"
+    assert info["model_target"] == "qwen2.5:0.5b"
     assert info["target_model"] == "test-model"
 
 
@@ -44,13 +44,13 @@ def test_openai_model_mapping(monkeypatch):
 
     client = ChatClient(
         url="https://api.openai.com/v1/chat/completions",
-        model="centi-nox",
+        model="nox",
         enable_logging=False,
     )
 
     info = client.describe_target()
 
-    assert info["model"] == "centi-nox"
+    assert info["model"] == "nox"
     assert info["target_model"] == os.getenv("NOX_OPENAI_MODEL", "gpt-4o-mini")
 
 
@@ -61,12 +61,12 @@ def test_openai_payload_structure(monkeypatch):
 
     client = ChatClient(
         url="https://api.openai.com/v1/chat/completions",
-        model="centi-nox",
+        model="nox",
         enable_logging=False,
     )
 
     raw_payload = {
-        "model": "centi-nox",
+        "model": "nox",
         "system": "Be helpful",
         "messages": [
             {"role": "user", "content": "hello"},

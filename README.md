@@ -15,14 +15,20 @@ private wizardry happens outside this directory.
 ## Config cheat sheet
 A `.env` next to the package or in CWD always auto-loads. Favorite variables:
 - `NOX_LLM_URL` – default `http://127.0.0.1:11434/api/generate`
-- `NOX_LLM_MODEL` – aim at `centi-nox`, `micro-nox`, whatever
+- `NOX_LLM_MODEL` – aim at `nox`
 - `NOX_LLM_API_KEY` / `OPENAI_API_KEY` – when you’re hitting remote clouds
-- `NOX_SCALE` – force persona scale (`nano|micro|milli|centi`)
+- `NOX_SCALE` – optional persona selector (defaults to `nox`)
 - `NOX_PERSONA_*` – override name, tagline, strengths, limits
 - `NOX_INSTRUMENTS` – comma-separated instrument roster for interactive selection
 - `NOX_HELPER_AUTOMATION` – set `1` when a router is ready to auto-dispatch
 
 Drop a JSON override at `config/persona.overrides.json` if you need a full persona rewrite.
+
+## Runtime shim (`/api/chat`)
+- `python -m central.runtime --host 127.0.0.1 --port 11437`
+- Reuses `NOX_LLM_URL`, `NOX_LLM_MODEL`, and API keys so replies go through the exact ChatClient stack.
+- Responds to `POST /api/chat` with `{message, meta}` so mobile shells can stay dumb while the core handles scoring/instruments.
+- Pass `--no-strip-reasoning` for raw output or `--log-sessions` to persist chats from HTTP callers.
 
 ## What ships here
 - `central/core/` – `ChatClient`, payload builders, reasoning cleanup
@@ -42,12 +48,12 @@ Need coverage for a new instrument or transport? Drop a test in `tests/`.
 
 ## Persona remix
 ```bash
-export NOX_SCALE=micro
+export NOX_SCALE=nox
 cat > config/persona.overrides.json <<'JSON'
 {
   "global": {"tagline": "Always-on studio co-pilot"},
   "scales": {
-    "micro": {
+    "nox": {
       "central_name": "spark-nox",
       "strengths": "Keeps private briefs in sync|Checks every command twice"
     }

@@ -200,7 +200,7 @@ class ChatClient:
         model_lower = (model or "").lower()
 
         if "api.openai.com" in url_lower:
-            if model_lower in {"centi-nox", "milli-nox", "micro-nox", "nano-nox"}:
+            if model_lower in {"nox", "nox:latest"}:
                 return get_env("NOX_OPENAI_MODEL") or "gpt-4o-mini"
             if model_lower in {"gpt-5"}:
                 return get_env("NOX_OPENAI_MODEL") or "gpt-4o-mini"

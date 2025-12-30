@@ -43,7 +43,6 @@ fresh.
 | Script | Why you care |
 |--------|--------------|
 | `scripts/build_release.sh` | Full PyInstaller bundle with Ollama runtime + models. |
-| `scripts/build_centi.sh` / `build_micro.sh` | Skinny bundles when you only need one scale. |
 | `scripts/push_core_pinaries.sh` | Recompiles all Nuitka extensions and refreshes `core_pinaries/`. |
 
 Every bundle packages `memory/system_prompt.md` + `memory/system_prompt.dev.md` so
@@ -55,13 +54,7 @@ cat > config/persona.overrides.json <<'JSON'
 {
   "global": {"tagline": "Studio co-pilot for Rei"},
   "scales": {
-    "nano": {
-      "central_name": "spark-nox",
-      "limits": [
-        "Prefers concise prompts",
-        "Escalate big research to milli/centi"
-      ]
-    }
+    "nox": {"central_name": "spark-nox"}
   }
 }
 JSON
@@ -96,8 +89,8 @@ model alias is ambiguous.
 - No secrets in history—use `.env` files or runtime export.
 - Refresh `inference/ollama` via `scripts/nox.run` when LayMA ships a new binary.
 - Validate any external instrument response before storing or streaming it.
-- Release builds bundle everything; `scripts/prepare_assets.sh` sets up models and
-  records active digests.
+- Release builds bundle everything; keep `assets/models/nox.gguf` and the runtime
+  ModelFile in sync with the shipped bundle.
 
 Stay sharp. Update the roadmap, keep CI green, and remember: if you ship without
 tests or documentation, I will drag your name through the system prompt.

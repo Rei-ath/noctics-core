@@ -1,7 +1,7 @@
 """PyInstaller entrypoint for packaged Noctics binaries.
 
 This module mirrors the repository-level ``main.py`` so that bundled
-executables (nano/micro/centi builds) can launch the same multitool CLI.
+executables can launch the same multitool CLI.
 """
 
 from __future__ import annotations

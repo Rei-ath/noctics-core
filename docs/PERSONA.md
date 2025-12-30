@@ -1,24 +1,18 @@
 # Persona Remix Manual (Nox whispering in your ear)
 
-Nox ships with scale-aware personas (`nano`, `micro`, `milli`, `centi`, plus a fallback `cloud` formerly known as `prime`). Each one tweaks how I introduce myself, flex strengths, and admit limits. You’re free to remix the vibe without touching source.
+Nox ships with a single built-in persona: `nox`. You can remix the name/tagline/strengths/limits without touching source.
 
-## Scale roll call
-| Scale | Default name | Alias | Model target | Best use |
-|-------|--------------|-------|--------------|----------|
-| nano  | nano-nox     | nano-nox      | qwen3:0.6b | Tiny boxes, instant answers. |
-| micro | micro-nox    | micro-nox     | qwen3:1.7b | Daily driver for frantic dev loops. |
-| milli | milli-nox    | milli-nox     | qwen3:4b   | Architecture debates, structured plans. |
-| centi | centi-nox    | centi-nox     | qwen3:8b   | Long-form synthesis, research binges. |
-| cloud | cloud-nox    | noctics-cloud | auto       | Remote/cloud runtimes, unspecified scale. |
-
-All inherit the same base attitude: straight shooter, loyal teammate, quick to call out shaky logic and just as quick to back you up.
+## Default persona
+| Key | Default name | Model target |
+|-----|--------------|--------------|
+| nox | nox          | qwen2.5:0.5b |
 
 ## Override hierarchy
 1. JSON file (`config/persona.overrides.json` or path in `NOX_PERSONA_FILE`)
 2. Environment variables (`NOX_PERSONA_*`)
 3. Built-in catalog
 
-`NOX_SCALE` forces which persona wins when the model alias is ambiguous.
+`NOX_SCALE` can be set to `nox`, but everything maps to `nox` by default.
 
 ### Fields you can flip
 - `central_name`
@@ -37,15 +31,13 @@ All inherit the same base attitude: straight shooter, loyal teammate, quick to c
     "strengths": "Keeps private briefs tight|Checks every command twice"
   },
   "scales": {
-    "micro": {
+    "nox": {
       "central_name": "spark-nox",
-      "parameter_label": "1.7B tuned for dev loops",
+      "parameter_label": "0.5B tuned for dev loops",
       "limits": [
         "Prefers focused prompts",
-        "Escalate big research to milli/centi"
-      ]
-    },
-    "centi": {
+        "Use a bigger/remote model for heavy research"
+      ],
       "tagline": "Chief of staff for long-haul strategy"
     }
   }
@@ -60,12 +52,12 @@ to apply without restarting Python.
 
 ### Env quick tweaks
 ```bash
-export NOX_SCALE=micro
+export NOX_SCALE=nox
 export NOX_PERSONA_TAGLINE="Studio co-pilot"
 export NOX_PERSONA_STRENGTHS="Knows Rei's dotfiles|Keeps dev shells tidy"
-export NOX_PERSONA_LIMITS_CENTI="Needs extra GPU juice"
+export NOX_PERSONA_LIMITS="Needs extra GPU juice"
 ```
-Scale-specific env vars append `_SCALE` (case-insensitive).
+Scale-specific env vars append `_NOX` (case-insensitive).
 
 ## Verify your remix
 1. Reload overrides or restart the CLI.

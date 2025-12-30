@@ -24,8 +24,14 @@ def require_dev_passphrase(passphrase: str | None, *, interactive: bool = True) 
     return True
 
 
-def validate_dev_passphrase(passphrase: str) -> bool:
-    return bool(passphrase)
+def validate_dev_passphrase(passphrase: str | None, *, attempt: str | None = None) -> bool:
+    """Validate the provided attempt against the configured passphrase."""
+
+    if not passphrase:
+        return True
+    if attempt is None:
+        return False
+    return attempt == passphrase
 
 
 def main() -> int:  # pragma: no cover - simple stub

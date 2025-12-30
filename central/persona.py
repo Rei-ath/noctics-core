@@ -75,91 +75,26 @@ class NoxPersona:
 
 
 PERSONA_CATALOG: Dict[str, NoxPersona] = {
-    "nano": NoxPersona(
-        scale="nano",
-        central_name="nano-nox",
-        variant_name="nano-nox",
-        model_target="qwen3:0.6b",
-        parameter_label="0.6B parameters",
-        tagline="Lightning-fast microkernel tuned for reflexive answers and ambient automation.",
+    "nox": NoxPersona(
+        scale="nox",
+        central_name="nox",
+        variant_name="nox",
+        model_target="qwen2.5:0.5b",
+        parameter_label="0.5B parameters",
+        tagline="Smallest local profile tuned for fast answers and low memory use.",
         strengths=(
-            "Delivers instant summaries and code tweaks without taxing local hardware.",
-            "Excellent for terminal instruments, quick math, refactors, and note synthesis.",
-            "Keeps conversations short, efficient, and always privacy-preserving.",
+            "Responds quickly and keeps outputs focused.",
+            "Great for terminal workflows, short code edits, and brief summaries.",
+            "Optimized for low-resource local inference.",
         ),
         limits=(
-            "Prefers concise prompts; long-form creative work is best handed to bigger siblings.",
-            "Limited memory for multi-step derivations—escalate complex plans to larger variants.",
-        ),
-    ),
-    "micro": NoxPersona(
-        scale="micro",
-        central_name="micro-nox",
-        variant_name="micro-nox",
-        model_target="qwen3:1.7b",
-        parameter_label="1.7B parameters",
-        tagline="Agile analyst that balances speed with richer reasoning and grounded guidance.",
-        strengths=(
-            "Handles multi-step problem solving, lightweight research, and structured planning.",
-            "Great at code review snippets, shell crafting, and contextual tutoring.",
-            "Remains frugal with resources while offering noticeably deeper narratives than nano.",
-        ),
-        limits=(
-            "Still favors bounded tasks—hand off heavy research or large codebases to milli/centi.",
-            "May summarize aggressively to stay responsive; ask for expansions when in doubt.",
-        ),
-    ),
-    "milli": NoxPersona(
-        scale="milli",
-        central_name="milli-nox",
-        variant_name="milli-nox",
-        model_target="qwen3:4b",
-        parameter_label="4B parameters",
-        tagline="Steady strategist with room for richer context, design exploration, and refactors.",
-        strengths=(
-            "Comfortable with architecture discussions, documentation drafts, and scenario planning.",
-            "Supports extended coding sessions with rationale and structured explanations.",
-            "Balances creativity with caution, pointing out trade-offs and privacy boundaries.",
-        ),
-        limits=(
-            "Large research sweeps or highly technical proofs may still benefit from centi-nox.",
-            "Can drift if given extremely long transcripts—summaries help keep it sharp.",
-        ),
-    ),
-    "centi": NoxPersona(
-        scale="centi",
-        central_name="centi-nox",
-        variant_name="centi-nox",
-        model_target="qwen3:8b",
-        parameter_label="8B parameters",
-        tagline="Flagship counselor with deep reasoning, enriched memory, and creative stamina.",
-        strengths=(
-            "Excels at exploratory research, complex debugging, and strategic synthesis.",
-            "Sustains long-form writing, architectural reviews, and multi-branch reasoning.",
-            "Proactive about instrument orchestration while guarding privacy and data boundaries.",
-        ),
-        limits=(
-            "Heavier on memory and compute—conserve when nano/micro suffice.",
-            "When uncertain, may suggest escalating to external instruments for verification.",
+            "Keep prompts concise; long context and deep reasoning can degrade quickly.",
+            "For heavy research or long-form synthesis, use a remote model/instrument instead.",
         ),
     ),
 }
 
-DEFAULT_PERSONA = NoxPersona(
-    scale="prime",
-    central_name="cloud-nox",
-    variant_name="noctics-cloud",
-    model_target="auto",
-    parameter_label="unspecified capacity",
-    tagline="Cloud bridge persona that keeps Nox steady when the runtime lives off-box.",
-    strengths=(
-        "Maintains privacy-first coordination while adapting to whichever remote model is configured.",
-        "Provides dependable guidance across CLI workflows and instrument orchestration.",
-    ),
-    limits=(
-        "Scale-specific personality unavailable—clarify the active Noctics variant if needed.",
-    ),
-)
+DEFAULT_PERSONA = PERSONA_CATALOG["nox"]
 
 PERSONA_ALIASES: Dict[str, str] = {}
 for key, persona in PERSONA_CATALOG.items():
@@ -171,14 +106,9 @@ for key, persona in PERSONA_CATALOG.items():
     PERSONA_ALIASES[persona.model_target.replace(":", "-")] = key
 
 PERSONA_SUBSTRINGS = [
-    ("0.6b", "nano"),
-    ("1.7b", "micro"),
-    ("4b", "milli"),
-    ("8b", "centi"),
-    ("nano", "nano"),
-    ("micro", "micro"),
-    ("milli", "milli"),
-    ("centi", "centi"),
+    ("0.5b", "nox"),
+    ("qwen2.5", "nox"),
+    ("nox", "nox"),
 ]
 
 
