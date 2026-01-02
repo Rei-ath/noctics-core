@@ -1,29 +1,42 @@
-# Persona Remix Manual (Nox whispering in your ear)
+# Persona Remix Manual (core)
 
-Nox ships with a single built-in persona: `nox`. You can remix the name/tagline/strengths/limits without touching source.
+Nox Core ships a single built-in persona (`nox`). You can override the
+name/tagline/strengths/limits without touching source.
 
 ## Default persona
-| Key | Default name | Model target |
-|-----|--------------|--------------|
-| nox | nox          | qwen2.5:0.5b |
+| Scale | Central name | Model target |
+|-------|--------------|--------------|
+| nox   | nox          | qwen2.5:0.5b |
 
-## Override hierarchy
-1. JSON file (`config/persona.overrides.json` or path in `NOX_PERSONA_FILE`)
-2. Environment variables (`NOX_PERSONA_*`)
-3. Built-in catalog
+## Selection and precedence
+- Persona selection checks `NOX_SCALE`, then the model name, using aliases and
+  substring matches (for example `nox`, `nox:latest`, `qwen2.5:0.5b`).
+- Override order:
+  1. Built-in catalog
+  2. JSON overrides (global, then scale)
+  3. Env overrides (`NOX_PERSONA_*`) which win
 
-`NOX_SCALE` can be set to `nox`, but everything maps to `nox` by default.
+## Override file locations
+- `NOX_PERSONA_FILE` (explicit path)
+- `config/persona.overrides.json`
+- `persona.override.json`
+- `persona.overrides.json`
 
-### Fields you can flip
+## Fields you can set
+Canonical fields:
 - `central_name`
 - `variant_name`
 - `model_target`
 - `parameter_label`
 - `tagline`
 - `strengths` (string or list; comma/pipe/newline split)
-- `limits` (same deal)
+- `limits` (string or list; comma/pipe/newline split)
 
-### JSON template
+Accepted JSON aliases:
+- `name`, `variant`, `model`, `parameters`, `motto`, `summary`,
+  `limitations`, `weaknesses`
+
+## JSON template
 ```json
 {
   "global": {
@@ -37,37 +50,43 @@ Nox ships with a single built-in persona: `nox`. You can remix the name/tagline/
       "limits": [
         "Prefers focused prompts",
         "Use a bigger/remote model for heavy research"
-      ],
-      "tagline": "Chief of staff for long-haul strategy"
+      ]
     }
   }
 }
 ```
-Call:
+
+Reload without restarting:
 ```python
 from central.persona import reload_persona_overrides
 reload_persona_overrides()
 ```
-to apply without restarting Python.
 
-### Env quick tweaks
+## Env quick tweaks
 ```bash
 export NOX_SCALE=nox
 export NOX_PERSONA_TAGLINE="Studio co-pilot"
 export NOX_PERSONA_STRENGTHS="Knows Rei's dotfiles|Keeps dev shells tidy"
 export NOX_PERSONA_LIMITS="Needs extra GPU juice"
 ```
-Scale-specific env vars append `_NOX` (case-insensitive).
 
-## Verify your remix
-1. Reload overrides or restart the CLI.
-2. Run `python main.py`.
-3. Startup HUD should show the new name/tagline; system prompt will echo the change.
-4. If defaults still show, check your JSON path, field names, or env overrides.
+Scale-specific env vars append the uppercase scale, for example
+`NOX_PERSONA_TAGLINE_NOX`.
+
+## Template tokens
+System prompt templates can include:
+- `{{NOX_NAME}}`
+- `{{NOX_VARIANT}}`
+- `{{NOX_VARIANT_DISPLAY}}`
+- `{{NOX_SCALE}}`
+- `{{NOX_SCALE_LABEL}}`
+- `{{NOX_MODEL_TARGET}}`
+- `{{NOX_PERSONA_TAGLINE}}`
+- `{{NOX_PERSONA_SUMMARY}}`
+- `{{NOX_PERSONA_STRENGTHS}}`
+- `{{NOX_PERSONA_LIMITS}}`
 
 ## Troubleshooting
-- Lists collapsing to one bullet? Separate with commas, pipes, or provide a JSON array.
-- Want defaults back? Delete the override file/env vars and call `reload_persona_overrides()`.
-- Need deeper hooks (custom onboarding, scriptable quirks)? File an issue or extend the schema.
-
-Go ahead—put your own swagger on the persona. I’ll still roast you if the typography is sloppy.
+- Lists collapsing to one bullet? Separate with commas, pipes, or JSON arrays.
+- Defaults still showing? Check `NOX_PERSONA_FILE` path and field names.
+- Need a clean slate? Remove overrides and call `reload_persona_overrides()`.

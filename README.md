@@ -1,90 +1,98 @@
 # Nox Core (the public brain)
 
-Nox again. This folder is the upstream `noctics-core` project—the part you let
-the world see. Everything here should be clean, tested, and mergeable. All the
-private wizardry happens outside this directory.
+Nox Core is the public, stdlib-only package that powers the ChatClient, runtime
+server, persona system, and memory tooling. If the private wrapper package is
+installed, `python main.py` will hand off to the full multitool CLI; otherwise it
+runs the lightweight core CLI.
 
-## TL;DR boot
-- `python -m venv jenv && source jenv/bin/activate`
+## Quick start
+- `python -m venv .venv && source .venv/bin/activate`
 - `python -m pip install -U pip`
-- `python scripts/bootstrap.py` *or* install manually:
-  - `python -m pip install -e .`
-  - `python -m pip install -e ../` if you need the wrapper for local dev
-- Launch: `python main.py --stream`
+- `python scripts/bootstrap.py`
+- `export NOX_LLM_URL=http://127.0.0.1:11434/api/chat`
+- `export NOX_LLM_MODEL=nox`
+- `python main.py --stream`
+
+`noctics-central` is the core CLI entrypoint. `noxl` is the memory browser.
 
 ## Config cheat sheet
-A `.env` next to the package or in CWD always auto-loads. Favorite variables:
-- `NOX_LLM_URL` – default `http://127.0.0.1:11434/api/generate`
-- `NOX_LLM_MODEL` – aim at `nox`
-- `NOX_LLM_API_KEY` / `OPENAI_API_KEY` – when you’re hitting remote clouds
-- `NOX_SCALE` – optional persona selector (defaults to `nox`)
-- `NOX_PERSONA_*` – override name, tagline, strengths, limits
-- `NOX_INSTRUMENTS` – comma-separated instrument roster for interactive selection
-- `NOX_HELPER_AUTOMATION` – set `1` when a router is ready to auto-dispatch
+- `.env` is auto-loaded from the package dir, CWD, and up to 3 parent dirs.
+  Set `NOCTICS_SKIP_DOTENV=1` to disable.
+- Required for ChatClient:
+  - `NOX_LLM_URL` (example: `http://127.0.0.1:11434/api/chat` or `/api/generate`)
+  - `NOX_LLM_MODEL` (persona scale or model alias)
+- Optional:
+  - `NOX_LLM_API_KEY` or `OPENAI_API_KEY` for hosted providers
+  - `NOX_TARGET_MODEL` / `NOX_OPENAI_MODEL` for OpenAI endpoint mapping
+  - `NOX_SCALE` and `NOX_PERSONA_*` for persona overrides (see `docs/PERSONA.md`)
+  - `NOX_CONFIG` or `NOCTICS_CONFIG_HOME` for config file discovery
+  - `NOCTICS_DATA_ROOT` or `NOCTICS_MEMORY_HOME` for session storage
 
-Drop a JSON override at `config/persona.overrides.json` if you need a full persona rewrite.
-
-## Runtime shim (`/api/chat`)
-- `python -m central.runtime --host 127.0.0.1 --port 11437`
-- Reuses `NOX_LLM_URL`, `NOX_LLM_MODEL`, and API keys so replies go through the exact ChatClient stack.
-- Responds to `POST /api/chat` with `{message, meta}` so mobile shells can stay dumb while the core handles scoring/instruments.
-- Pass `--no-strip-reasoning` for raw output or `--log-sessions` to persist chats from HTTP callers.
-
-## What ships here
-- `central/core/` – `ChatClient`, payload builders, reasoning cleanup
-- `central/commands/` – sessions, instruments, completions, help text
-- `central/cli/` – argument parsing + interactive shell
-- `interfaces/` – session logging, PII sanitizer, dotenv loader
-- `noxl/` – memory explorer CLI and utilities
-- `tests/` – pytest suite; keep it green
-
-## Developer loop
-```bash
-pytest -q
-ruff check .
-python main.py --stream
-```
-Need coverage for a new instrument or transport? Drop a test in `tests/`.
-
-## Persona remix
-```bash
-export NOX_SCALE=nox
-cat > config/persona.overrides.json <<'JSON'
+Example `config/central.json`:
+```json
 {
-  "global": {"tagline": "Always-on studio co-pilot"},
-  "scales": {
-    "nox": {
-      "central_name": "spark-nox",
-      "strengths": "Keeps private briefs in sync|Checks every command twice"
-    }
+  "instrument": {
+    "automation": false,
+    "roster": ["claude", "gpt-4o"]
   }
 }
-JSON
-python -c "from central.persona import reload_persona_overrides; reload_persona_overrides()"
 ```
 
-## Sessions + memory
-- Logs land in `~/.local/share/noctics/memory/sessions/YYYY-MM-DD/`.
-- `python -m noxl --limit 10` to peek at recent chats.
-- `/title`, `/rename`, `/archive` work in the CLI.
-- `NOX_INSTRUMENT_ANON=0` if you want raw instrument prompts stored (be careful).
+## Runtime server (`/api/chat`)
+- `python -m central.runtime --host 127.0.0.1 --port 11437`
+- Uses the same ChatClient stack as the CLI (no streaming for HTTP calls).
+- Flags/env: `--default-url` (`NOX_RUNTIME_URL`), `--default-model`
+  (`NOX_RUNTIME_MODEL`), `--no-strip-reasoning`, `--log-sessions`,
+  `NOX_RUNTIME_ALLOW_ORIGIN`.
 
-## Instrument reality check
-Nox tries local inference first. When it requests an external instrument:
-1. It asks you which instrument to use (unless you passed `--instrument`).
-2. Emits a sanitized `[INSTRUMENT QUERY]`.
-3. Waits for the router/automation. No router? You’ll get a reminder to paste results.
+Request shape:
+```json
+{
+  "messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}],
+  "model": "nox",
+  "url": "http://127.0.0.1:11434/api/chat",
+  "temperature": 0.7,
+  "max_tokens": -1,
+  "sanitize": false
+}
+```
 
-## Dev mode
-Gate it with a passphrase (`NOX_DEV_PASSPHRASE`). When unlocked:
-- Skips onboarding, labels you as the developer.
-- Enables `/shell` bridging and richer status HUD.
-- Logs carry the developer identity flag.
+## Inference runtime
+- Core inference plumbing lives in `central/core/payloads.py` and
+  `central/transport.py`.
+- `scripts/nox.run` boots a local Ollama binary at `inference/ollama` and
+  ensures models are available.
+- See `docs/INFERENCE.md` for endpoint behavior, tuning env vars, and the full
+  bootstrap flow.
 
-## Release sync (for the private repo)
-When you cut a release, the parent repo bumps the submodule pointer to a tagged
-commit here. Keep history squeaky clean—no vendored binaries, no secrets. If you
-need obfuscation, run `scripts/push_core_pinaries.sh` from the parent repo; that’s
-where the compiled extensions live.
+## Sessions and memory
+- The core CLI logs sessions by default.
+- Default root: `~/.local/share/noctics/memory` (or `XDG_DATA_HOME`).
+- Override with `NOCTICS_DATA_ROOT` or `NOCTICS_MEMORY_HOME`.
+- If the preferred root is not writable, the repo `memory/` directory is used.
+- Use `noxl` to browse, rename, merge, and archive sessions (see
+  `docs/SESSIONS.md`).
 
-Keep it sharp, keep it tested, and don’t make me revert anything.
+## Persona remix
+- Overrides live in `config/persona.overrides.json` or `NOX_PERSONA_FILE`.
+- Env overrides (`NOX_PERSONA_*`) win over JSON.
+- See `docs/PERSONA.md` for fields and template tokens.
+
+## Instruments
+- The core ships the hooks (`ChatClient.wants_instrument`,
+  `ChatClient.process_instrument_result`) but not the router.
+- If the optional `instruments` package is installed, ChatClient will attempt to
+  call it automatically.
+- See `docs/INSTRUMENTS.md` for the wiring details.
+
+## What ships here
+- `central/core/` - ChatClient, payload builders, reasoning cleanup
+- `central/cli/` - lightweight CLI entrypoint
+- `central/runtime/` - tiny HTTP server for `/api/chat`
+- `inference/` - local Ollama binary used by `scripts/nox.run`
+- `interfaces/` - dotenv loader, PII scrubber, session logger
+- `noxl/` - memory explorer CLI + utilities
+- `scripts/` - bootstrapper and local inference helper
+- `tests/` - pytest suite; keep it green
+
+Docs live in `docs/` for CLI, persona, instruments, inference, and sessions.

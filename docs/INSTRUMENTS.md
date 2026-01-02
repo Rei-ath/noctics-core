@@ -1,59 +1,58 @@
-# Instrument Hustle (how Nox calls in backup)
+# Instrument Flow (core)
 
-Nox knows when it’s outmatched and needs an external instrument—an LLM router,
-another provider, whatever muscle you’ve got. Here’s how to control the flow.
+The public core ships the hooks for instrument routing, but not the router
+itself. If the optional `instruments` package is installed (in the full
+Noctics suite), `ChatClient` will attempt to call it automatically.
 
-## Label the instrument
-- CLI flags: `--instrument claude`
-- Slash command: `/instrument claude`
-- No label set? You’ll get a picker with whatever roster we know about.
+## When instruments are used
+- `ChatClient.wants_instrument(text)` detects `[INSTRUMENT QUERY]` blocks.
+- If an instrument backend is available, `ChatClient.one_turn(...)` tries it
+  before falling back to the local transport.
+- To stitch a manual result back in, call `ChatClient.process_instrument_result(...)`.
 
-Rosters come from:
-1. `NOX_INSTRUMENTS` env var (`"claude,gpt-4o,grok"`)
-2. `config/central.json`:
-   ```json
-   {
-     "instrument": {
-       "roster": ["claude", "gpt-4o"],
-       "automation": false
-     }
-   }
-   ```
-3. Built-in defaults if you’re too lazy to configure
+## Parsing and sanitizing queries
+Use the helper utilities in `central.commands.instrument`:
+- `extract_instrument_query(text)` pulls the block contents.
+- `anonymize_for_instrument(text, user_name=...)` redacts common PII and names.
+- `print_sanitized_instrument_query(...)` prints a friendly, sanitized preview.
 
-## Sanitization + tags
-- `--sanitize` (or env defaults) scrubs common PII.
-- `NOX_REDACT_NAMES="Alice,Bob"` masks extra tokens.
-- Instrument requests show up as:
-  ```
-  [INSTRUMENT QUERY]
-  ...
-  [/INSTRUMENT QUERY]
-  ```
-- `--anon-instrument` (aliases respect `NOX_INSTRUMENT_ANON`) keeps identifiers vague when logging.
+Example flow:
+```python
+from central.core import ChatClient
+from central.commands.instrument import extract_instrument_query, anonymize_for_instrument
 
-## Built-in providers
-- **OpenAI** – Models starting with `gpt`, `o1`, or URLs hitting `api.openai.com`.
-- **Anthropic** – Any `claude-*`, `haiku`, or `sonnet` models, plus `api.anthropic.com`.
-- More? Drop a plugin that imports `instruments.register_instrument` and call it with your class. Set
-  `NOX_INSTRUMENT_PLUGINS="your_module,another_module"` to auto-import on startup.
+client = ChatClient(url="http://127.0.0.1:11434/api/chat", model="nox")
+reply = client.one_turn("Handle the request and call an instrument if needed.")
+query = extract_instrument_query(reply or "")
+if query:
+    safe_query = anonymize_for_instrument(query, user_name="Rei")
+    # send safe_query to your provider, then stitch the result:
+    client.process_instrument_result("<provider response>")
+```
 
-## Automation story
-1. Nox explains why an instrument is needed and prints the sanitized query.
-2. Automation off (default): you get instructions to run it yourself.
-3. Automation on: set `NOX_INSTRUMENT_AUTOMATION=1`. A router listens for the query, sends it out, and feeds `[INSTRUMENT RESULT]` back to Nox.
-4. `ChatClient.process_instrument_result(...)` handles the stitching so the conversation resumes smoothly.
+## Instrument roster + automation config
+These settings are consumed by the full Noctics CLI (and available to your own
+routers):
+- `NOX_INSTRUMENTS` - comma-separated labels (ex: `"claude,gpt-4o"`).
+- `NOX_INSTRUMENT_AUTOMATION` - `1/true/on` to enable automation.
+- `NOX_REDACT_NAMES` - extra names to redact in queries.
 
-## Custom routers
-If you’re writing your own router:
-- Watch session logs for `[INSTRUMENT QUERY]`.
-- Parse the label (if any) and query text.
-- Send the request to your provider, collect the response.
-- Feed it back via the CLI prompt or `process_instrument_result`.
+Config file (`config/central.json` or `NOX_CONFIG`) example:
+```json
+{
+  "instrument": {
+    "automation": false,
+    "roster": ["claude", "gpt-4o"]
+  }
+}
+```
 
-## Pro tips
-- Keep instrument names short and unique—makes tab-completion happier.
-- Use env overrides per deployment (`NOX_INSTRUMENTS="gpt-4o,claude"`) so you don’t leak internal rosters.
-- Remember to sanitize instrument outputs before you paste them back; Nox logs everything by default.
+## Instrument result prompt
+`ChatClient.process_instrument_result(...)` prepends an instrument follow-up
+prompt. Override it by creating:
+`central/memory/instrument_result_prompt.txt`
+Otherwise the built-in default prompt is used.
 
-That’s the playbook. Automate it, extend it, or ignore it and keep doing manual pastes—either way, I’m logging the receipts.
+## Safety note
+Always sanitize and validate external instrument responses before logging or
+replaying them. The core logger stores whatever you provide.
