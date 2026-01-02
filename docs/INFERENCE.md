@@ -16,6 +16,16 @@ Nox detects the URL path and shapes requests accordingly:
   `prompt` and `system` before sending.
 - Other URLs: payload is sent as-is and streaming uses SSE framing.
 
+## Response shape expectations
+- `/api/generate` expects JSON lines with a `response` field (plus optional
+  `error`). Responses are concatenated in order.
+- `/api/chat` expects JSON with `message.content` (or `response` as a fallback).
+- Other URLs (non-stream) expect OpenAI-style JSON with
+  `choices[0].message.content`. If that key is missing, the reply is `None`.
+- Other URLs (streaming) expect SSE frames whose `data:` payload is either raw
+  text or JSON with `choices[0].delta.content`, `choices[0].message.content`,
+  or `choices[0].text`.
+
 ## Payload construction
 `build_payload(...)` builds a unified payload that works with both `/api/chat`
 and `/api/generate`:
@@ -34,6 +44,10 @@ These are read when building the payload:
 - `NOX_NUM_BATCH` -> `options.num_batch`
 - `NOX_KEEP_ALIVE`, `NOX_OLLAMA_KEEP_ALIVE`, `OLLAMA_KEEP_ALIVE` -> `keep_alive`
 - `NOX_NUM_PREDICT` is not used; `max_tokens` maps to `options.num_predict`
+
+## Authentication header
+If `NOX_LLM_API_KEY` (or `OPENAI_API_KEY`) is set, requests include
+`Authorization: Bearer <key>` for all endpoints.
 
 ## OpenAI endpoint adapter
 If the URL contains `openai.com`, ChatClient rewrites the payload to an OpenAI
