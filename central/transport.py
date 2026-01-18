@@ -3,9 +3,108 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, Optional, Tuple
+import os
+import subprocess
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+
+class ProcessTransport:
+    """Spawn the local runox runner and stream stdout directly (no HTTP)."""
+
+    def __init__(self, binary: str, model_path: Optional[str] = None) -> None:
+        self.binary = binary
+        self.model_path = model_path
+        self.url = "process://runox"
+        self.api_key = None
+        self.is_process = True
+
+    def send(
+        self,
+        payload: Dict[str, Any],
+        *,
+        stream: bool = False,
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        prompt = _payload_to_prompt(payload)
+        if not prompt:
+            raise URLError("No prompt content found for local runner payload.")
+
+        options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+
+        def _int_or(value: Any, default: int) -> int:
+            try:
+                number = int(value)
+            except (TypeError, ValueError):
+                return default
+            return number if number > 0 else default
+
+        max_tokens = _int_or(options.get("num_predict"), 256)
+        ctx = _int_or(options.get("num_ctx"), 1024)
+        batch = _int_or(options.get("num_batch"), 32)
+        temperature = options.get("temperature")
+
+        args = [
+            self.binary,
+            "-raw",
+            "-max-tokens",
+            str(max_tokens),
+            "-ctx",
+            str(ctx),
+            "-batch",
+            str(batch),
+        ]
+        if temperature is not None:
+            args.extend(["-temp", str(temperature)])
+        if self.model_path:
+            args.extend(["-model", self.model_path])
+
+        env = dict(os.environ)
+        num_threads = options.get("num_thread")
+        if num_threads:
+            env["NOX_NUM_THREADS"] = str(num_threads)
+
+        try:
+            proc = subprocess.Popen(
+                args,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+                env=env,
+            )
+        except OSError as exc:  # pragma: no cover - subprocess setup errors
+            raise URLError(f"Failed to launch local runner {self.binary}: {exc}") from exc
+
+        if proc.stdin is None or proc.stdout is None or proc.stderr is None:
+            raise URLError("Local runner I/O streams are unavailable.")
+
+        proc.stdin.write(prompt)
+        proc.stdin.close()
+
+        acc: List[str] = []
+        if stream:
+            for chunk in iter(lambda: proc.stdout.read(1), ""):
+                if not chunk:
+                    break
+                acc.append(chunk)
+                if on_chunk:
+                    on_chunk(chunk)
+        else:
+            stdout_text = proc.stdout.read()
+            if stdout_text:
+                acc.append(stdout_text)
+
+        stderr_text = proc.stderr.read()
+        code = proc.wait()
+        if code != 0:
+            raise URLError(
+                f"Local runner exited with code {code}: {stderr_text.strip() or ''.join(acc)}"
+            )
+
+        return "".join(acc), {"stderr": stderr_text}
 
 
 class LLMTransport:
@@ -321,3 +420,56 @@ def _extract_sse_piece(data_str: str) -> Optional[str]:
     if piece is None:
         piece = choice.get("text")
     return piece
+
+
+def _payload_to_prompt(payload: Dict[str, Any]) -> str:
+    messages = payload.get("messages") or []
+    if isinstance(messages, list) and messages:
+        blocks: List[str] = []
+
+        def _flatten(content: Any) -> str:
+            if content is None:
+                return ""
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                parts: List[str] = []
+                for item in content:
+                    if isinstance(item, dict):
+                        text_value = item.get("text")
+                        if text_value is None:
+                            text_value = str(item)
+                        parts.append(str(text_value))
+                    elif item is not None:
+                        parts.append(str(item))
+                return "".join(parts)
+            return str(content)
+
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            role = str(msg.get("role") or "user").strip() or "user"
+            content = _flatten(msg.get("content")).strip()
+            if not content:
+                continue
+            blocks.append(f"<|im_start|>{role}\n{content}\n<|im_end|>")
+        if not blocks:
+            return ""
+        blocks.append("<|im_start|>assistant\n")
+        return "\n".join(blocks)
+
+    prompt = str(payload.get("prompt") or "").strip()
+    if not prompt:
+        return ""
+    system = str(payload.get("system") or "").strip()
+    if not system:
+        return prompt
+    return (
+        "<|im_start|>system\n"
+        f"{system}\n"
+        "<|im_end|>\n"
+        "<|im_start|>user\n"
+        f"{prompt}\n"
+        "<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )

@@ -13,6 +13,7 @@ _ARCHIVE_AVAILABLE = hasattr(noxl, "archive_early_sessions")
 noxl_archive_early_sessions = getattr(noxl, "archive_early_sessions", None)
 noxl_list_sessions = noxl.list_sessions
 load_session_messages = noxl.load_session_messages
+load_session_context = noxl.load_session_context
 merge_sessions_paths = noxl.merge_sessions_paths
 resolve_session = noxl.resolve_session
 set_session_title_for = noxl.set_session_title_for
@@ -95,7 +96,7 @@ def load_into_context(ident: str, *, messages: List[Dict[str, object]]) -> Optio
     if not path:
         print(color(f"No session found for: {ident}", fg="red"))
         return None
-    loaded = load_session_messages(path)
+    loaded = load_session_context(path)
     if not loaded:
         print(color("Session is empty or unreadable.", fg="red"))
         return None

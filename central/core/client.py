@@ -27,15 +27,20 @@ from .payloads import build_payload
 from .reasoning import clean_public_reply, extract_public_segments, strip_chain_of_thought
 from nox_env import get_env, require_env
 
-try:  # instruments package lives in the superproject
-    from instruments import build_instrument as _build_instrument
-except Exception:  # pragma: no cover - optional dependency
-    _build_instrument = None
+_build_instrument = None
 
 if TYPE_CHECKING:  # pragma: no cover - type checking only
     from instruments.base import BaseInstrument
 
 DEFAULT_URL = "http://127.0.0.1:11434/api/chat"
+
+
+def _normalize_context_limit(value: object) -> int:
+    try:
+        raw = int(str(value).strip())
+    except (TypeError, ValueError):
+        return 0
+    return raw if raw > 0 else 0
 
 
 class ChatClient:
@@ -60,6 +65,8 @@ class ChatClient:
         memory_user_display: Optional[str] = None,
         transport: Optional[LLMTransport] = None,
         connector: Optional[NoxConnector] = None,
+        context_turns: Optional[int] = None,
+        context_messages: Optional[int] = None,
     ) -> None:
         if os.getenv("PYTEST_CURRENT_TEST") is None and os.getenv("NOCTICS_SKIP_DOTENV") != "1":
             try:
@@ -68,10 +75,6 @@ class ChatClient:
                 pass
 
         resolved_url = url or get_env("NOX_LLM_URL")
-        if resolved_url is None:
-            raise RuntimeError(
-                "NOX_LLM_URL is not set. Define it in your .env file or export it before running Nox."
-            )
 
         resolved_api_key = api_key or (get_env("NOX_LLM_API_KEY") or os.getenv("OPENAI_API_KEY"))
 
@@ -82,7 +85,7 @@ class ChatClient:
             transport = connector.connect()
 
         self.transport = transport
-        resolved_url = getattr(transport, "url", resolved_url)
+        resolved_url = getattr(transport, "url", resolved_url) or ""
         resolved_api_key = getattr(transport, "api_key", resolved_api_key)
 
         self.url = resolved_url
@@ -95,6 +98,12 @@ class ChatClient:
         self.sanitize = sanitize
         self.messages: List[Dict[str, Any]] = list(messages or [])
         self.strip_reasoning = strip_reasoning
+        context_turns_value = context_turns if context_turns is not None else get_env("NOX_CONTEXT_TURNS")
+        context_messages_value = (
+            context_messages if context_messages is not None else get_env("NOX_CONTEXT_MESSAGES")
+        )
+        self.context_turns = _normalize_context_limit(context_turns_value)
+        self.context_messages = _normalize_context_limit(context_messages_value)
         self.persona = resolve_persona(self.model)
         self.last_instrument_error: Optional[str] = None
 
@@ -132,6 +141,28 @@ class ChatClient:
         """Apply PII scrubbing when the client runs in sanitize mode."""
 
         return pii_sanitize(text) if self.sanitize else text
+
+    def _limit_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not self.context_turns and not self.context_messages:
+            return messages
+
+        last_system_index: Optional[int] = None
+        dialogue_indices: List[int] = []
+        for idx, msg in enumerate(messages):
+            if msg.get("role") == "system":
+                last_system_index = idx
+            else:
+                dialogue_indices.append(idx)
+
+        max_dialogue = self.context_turns * 2 if self.context_turns else self.context_messages
+        if max_dialogue and len(dialogue_indices) > max_dialogue:
+            dialogue_indices = dialogue_indices[-max_dialogue:]
+
+        keep_indices = set(dialogue_indices)
+        if last_system_index is not None:
+            keep_indices.add(last_system_index)
+
+        return [messages[idx] for idx in range(len(messages)) if idx in keep_indices]
 
     def _log_turn(self, user_content: str, assistant_content: str) -> None:
         """Persist a turn to the session log, including the active system prompt."""
@@ -265,6 +296,9 @@ class ChatClient:
     def check_connectivity(self, *, timeout: float = 1.0) -> None:
         """Raise ``URLError`` if the configured endpoint is unreachable."""
 
+        if getattr(self.transport, "is_process", False) or (self.url or "").startswith("process://"):
+            return
+
         parsed = urlparse(self.url)
         host = parsed.hostname
         if not host:
@@ -339,6 +373,7 @@ class ChatClient:
     ) -> Optional[str]:
         to_send_user = self._sanitize_user_text(user_text)
         turn_messages = self.messages + [{"role": "user", "content": to_send_user}]
+        send_messages = self._limit_messages(turn_messages)
         stream_callback = on_delta
         public_state: Dict[str, Any] = {}
         if self.stream:
@@ -359,12 +394,12 @@ class ChatClient:
 
         assistant: Optional[str] = None
 
-        assistant, instrument_error = self._call_instrument(turn_messages, on_chunk=stream_callback)
+        assistant, instrument_error = self._call_instrument(send_messages, on_chunk=stream_callback)
 
         if assistant is None:
             payload = build_payload(
                 model=self.target_model,
-                messages=turn_messages,
+                messages=send_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 stream=bool(self.stream),
@@ -416,13 +451,14 @@ class ChatClient:
         instrument_messages = list(self.messages)
         instrument_messages.append({"role": "system", "content": load_instrument_prompt()})
         instrument_messages.append({"role": "user", "content": instrument_wrapped})
+        send_messages = self._limit_messages(instrument_messages)
         reply: Optional[str] = None
-        reply, instrument_error = self._call_instrument(instrument_messages, on_chunk=on_delta)
+        reply, instrument_error = self._call_instrument(send_messages, on_chunk=on_delta)
 
         if reply is None:
             payload = build_payload(
                 model=self.model,
-                messages=instrument_messages,
+                messages=send_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 stream=bool(self.stream),

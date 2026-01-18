@@ -8,7 +8,6 @@ except Exception:  # pragma: no cover
     readline = None  # type: ignore
 
 from noxl import list_sessions
-from central.commands.instrument import get_instrument_candidates
 
 
 def setup_completions() -> None:
@@ -29,8 +28,6 @@ def setup_completions() -> None:
         "/ls",
         "/last",
         "/iam",
-        "/instrument",
-        "/anon",
         "/load",
         "/title",
         "/rename",
@@ -40,8 +37,6 @@ def setup_completions() -> None:
         "/show",
         "/browse",
     ]
-
-    instrument_candidates = get_instrument_candidates()
 
     def session_suggestions() -> List[str]:
         items = list_sessions()
@@ -65,12 +60,6 @@ def setup_completions() -> None:
         arg_region = line[len(head):]
         arg_text = arg_region.lstrip()
         arg_index = 0 if not arg_text or arg_text.endswith(" ") else len(arg_text.split()) - 1
-
-        if head == "/instrument":
-            if beg >= len(head) + 1:
-                matches = [h for h in instrument_candidates if h.startswith(text or "")]
-                return matches[state] if state < len(matches) else None
-            return None
 
         if head in {"/load", "/rename", "/merge", "/show"}:
             if beg >= len(head) + 1 and arg_index == 0:
